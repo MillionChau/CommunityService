@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Community.Infrastructure.Base;
+
 public class UnitOfWork : IUnitOfWork
 {
     private readonly CommunityDbContext _dbContext;
@@ -19,7 +20,7 @@ public class UnitOfWork : IUnitOfWork
     }
     public IRepository<T> GetRepository<T>() where T : class
     {
-        if (_repositories == null) 
+        if (_repositories == null)
             _repositories = new Hashtable();
         var repoType = typeof(T).Name;
         if (!_repositories.ContainsKey(repoType))

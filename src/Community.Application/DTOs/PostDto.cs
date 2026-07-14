@@ -9,7 +9,7 @@ public class PostDto
     public int? CommentsCount { get; set; }
     public int? SharesCount { get; set; }
     public int? ViewsCount { get; set; }
-    
+
     // Audit fields from AuditableEntity
     public Guid? CreatedBy { get; set; }
     public DateTime CreatedDate { get; set; }

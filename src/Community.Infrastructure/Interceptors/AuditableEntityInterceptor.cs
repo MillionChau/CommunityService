@@ -3,6 +3,7 @@ using Community.Domain.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace Community.Infrastructure.Interceptors;
+
 public class AuditableEntityInterceptor : SaveChangesInterceptor
 {
     private readonly ICurrentUserService _currentUserService;

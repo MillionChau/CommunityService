@@ -8,8 +8,8 @@ namespace Community.Application
         public static IServiceCollection AddApplicationServices(this IServiceCollection services)
         {
             var assembly = Assembly.GetExecutingAssembly();
-        
-            services.AddMediatR(cfg => 
+
+            services.AddMediatR(cfg =>
             {
                 cfg.RegisterServicesFromAssembly(assembly);
                 cfg.AddOpenBehavior(typeof(Common.Behaviors.ValidationBehavior<,>));

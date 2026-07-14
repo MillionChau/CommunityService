@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 namespace Community.Infrastructure;
+
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration configuration)
@@ -21,7 +22,7 @@ public static class DependencyInjection
         });
         services.AddScoped<IApplicationDbContext>(provider =>
             provider.GetRequiredService<CommunityDbContext>());
-            
+
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<Community.Domain.Interfaces.IUnitOfWork>(sp => sp.GetRequiredService<IUnitOfWork>());
         services.AddScoped<ICurrentUserService, CurrentUserService>();

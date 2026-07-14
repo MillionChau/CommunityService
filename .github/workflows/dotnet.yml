@@ -2,34 +2,69 @@ name: .NET CI
 
 on:
   push:
-    branches: [ "main", "master", "develop" ]
+    branches: [ "develop", "main", "master" ]
   pull_request:
-    branches: [ "main", "master", "develop" ]
+    branches: [ "develop", "main", "master" ]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '10.0.x'
-        
-    - name: Restore dependencies
-      run: dotnet restore Community.slnx
-      
-    - name: Build
-      run: dotnet build Community.slnx --no-restore --configuration Release
-      
-    - name: Test
-      run: |
-        # Only run test if there are test projects in the solution
-        if grep -q "tests/" Community.slnx; then
-          dotnet test Community.slnx --no-build --configuration Release --verbosity normal
-        else
-          echo "No test projects found in solution, skipping tests."
-        fi
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Validate Commit Message
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "Commit Message: $COMMIT_MSG"
+
+          # Skip validation for merge commits
+          if [[ "$COMMIT_MSG" =~ ^Merge ]]; then
+            echo "Skipping validation for merge commit."
+            exit 0
+          fi
+
+          if [[ ! "$COMMIT_MSG" =~ ^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?:\ .+ ]]; then
+            echo "❌ Invalid commit message."
+            echo "Example:"
+            echo "feat: add community api"
+            exit 1
+          fi
+
+      - name: Restore
+        run: dotnet restore Community.slnx
+
+      - name: Check Code Format
+        run: dotnet format Community.slnx --verify-no-changes --verbosity diagnostic
+
+      - name: Build
+        run: dotnet build Community.slnx --no-restore --configuration Release
+
+      - name: Run Unit Tests
+        run: |
+          if find . -name "*Tests.csproj" | grep -q .; then
+            dotnet test Community.slnx \
+              --no-build \
+              --configuration Release \
+              --collect:"XPlat Code Coverage"
+          else
+            echo "No test projects found."
+          fi
+
+      - name: Check Vulnerable Packages
+        run: dotnet list Community.slnx package --vulnerable
+
+      - name: Publish
+        run: dotnet publish Community.slnx -c Release -o ./publish --no-build
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Community-Service
+          path: ./publish

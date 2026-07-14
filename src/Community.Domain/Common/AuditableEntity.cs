@@ -5,7 +5,7 @@ namespace Community.Domain.Common
     public abstract class AuditableEntity<T> : Entity<T>, IAuditableEntity
     {
         protected AuditableEntity() : base() { }
-        
+
         protected AuditableEntity(T id) : base(id) { }
 
         public Guid? CreatedBy { get; set; }
@@ -21,7 +21,7 @@ namespace Community.Domain.Common
         public IReadOnlyList<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
 
         protected AuditableAggregateRoot() : base() { }
-        
+
         protected AuditableAggregateRoot(T id) : base(id) { }
 
         public void AddDomainEvent(IDomainEvent domainEvent)
