@@ -3,6 +3,7 @@ using Community.Application.Interfaces;
 using Microsoft.AspNetCore.Http;
 
 namespace Community.Infrastructure.Services;
+
 public class CurrentUserService : ICurrentUserService
 {
     private readonly IHttpContextAccessor _httpContextAccessor;

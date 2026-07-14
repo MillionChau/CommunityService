@@ -7,7 +7,7 @@ namespace Community.Domain.Common
         public T Id { get; set; } = default!;
 
         protected Entity() { }
-        
+
         protected Entity(T id)
         {
             Id = id;
@@ -48,7 +48,7 @@ namespace Community.Domain.Common
         public IReadOnlyList<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
 
         protected AggregateRoot() : base() { }
-        
+
         protected AggregateRoot(T id) : base(id) { }
 
         public void AddDomainEvent(IDomainEvent domainEvent)
