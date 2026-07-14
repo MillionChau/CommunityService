@@ -1,0 +1,35 @@
+name: .NET CI
+
+on:
+  push:
+    branches: [ "main", "master", "develop" ]
+  pull_request:
+    branches: [ "main", "master", "develop" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore Community.slnx
+      
+    - name: Build
+      run: dotnet build Community.slnx --no-restore --configuration Release
+      
+    - name: Test
+      run: |
+        # Only run test if there are test projects in the solution
+        if grep -q "tests/" Community.slnx; then
+          dotnet test Community.slnx --no-build --configuration Release --verbosity normal
+        else
+          echo "No test projects found in solution, skipping tests."
+        fi
