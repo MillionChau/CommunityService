@@ -32,7 +32,7 @@ public class ExceptionHandlingMiddleware
     private static Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
         context.Response.ContentType = "application/json";
-        
+
         var responseCode = HttpStatusCode.InternalServerError;
         var message = exception.Message;
         object? errors = null;
