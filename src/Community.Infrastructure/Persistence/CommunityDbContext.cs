@@ -9,6 +9,8 @@ public class CommunityDbContext : DbContext, IApplicationDbContext
     public CommunityDbContext(DbContextOptions<CommunityDbContext> options) : base(options) { }
 
     public DbSet<Post> Posts => Set<Post>();
+    public DbSet<Comment> Comments => Set<Comment>();
+    public DbSet<PostReport> PostReports => Set<PostReport>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
