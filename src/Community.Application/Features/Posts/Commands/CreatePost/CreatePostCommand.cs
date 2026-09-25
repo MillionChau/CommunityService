@@ -1,6 +1,8 @@
 using Community.Application.Common.Models;
+using Community.Application.Interfaces;
 using Community.Domain.Contracts;
 using Community.Domain.Entities;
+using Community.Domain.Enums;
 using Community.Domain.Interfaces;
 using FluentValidation;
 using MediatR;
@@ -23,24 +25,53 @@ public class CreatePostCommandValidator : AbstractValidator<CreatePostCommand>
     }
 }
 
+/// <summary>
+/// Đăng bài viết mới (FR-15 / UC-15). Trước khi lưu, nội dung được kiểm duyệt
+/// bởi IContentModerationService (QualityService): nội dung hợp lệ → Published,
+/// vi phạm → Hidden (FLAGGED, chờ Admin xử lý — SRS mục Độ an toàn).
+/// AuthorId ưu tiên lấy từ JWT; nếu không có (dev/test) mới dùng body.
+/// </summary>
 public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, ResponseModel<Guid>>
 {
     private readonly IPostRepository _postRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUserService _currentUser;
+    private readonly IContentModerationService _moderation;
+    private readonly IRealTimeNotifier _notifier;
 
-    public CreatePostCommandHandler(IPostRepository postRepository, IUnitOfWork unitOfWork)
+    public CreatePostCommandHandler(
+        IPostRepository postRepository,
+        IUnitOfWork unitOfWork,
+        ICurrentUserService currentUser,
+        IContentModerationService moderation,
+        IRealTimeNotifier notifier)
     {
         _postRepository = postRepository;
         _unitOfWork = unitOfWork;
+        _currentUser = currentUser;
+        _moderation = moderation;
+        _notifier = notifier;
     }
 
     public async Task<ResponseModel<Guid>> Handle(CreatePostCommand request, CancellationToken cancellationToken)
     {
+        if (!_currentUser.IsAuthenticated || _currentUser.UserId is null)
+            throw new UnauthorizedAccessException("Authentication is required.");
+
+        // AuthorId luôn lấy từ JWT token (không tin body — tránh đăng bài hộ người khác)
+        var authorId = _currentUser.UserId;
+
+        var content = request.Content ?? string.Empty;
+
+        // Kiểm duyệt nội dung tự động (UC-15: Quality Service kiểm duyệt trước khi hiển thị)
+        var moderation = await _moderation.CheckAsync(content, cancellationToken);
+
         var post = new Post
         {
             Id = Guid.NewGuid(),
-            Content = request.Content,
-            AuthorId = request.AuthorId,
+            Content = content,
+            AuthorId = authorId,
+            Status = moderation.IsValid ? (int)ContentStatus.Published : (int)ContentStatus.Hidden,
             LikesCount = 0,
             CommentsCount = 0,
             SharesCount = 0,
@@ -50,6 +81,21 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
         await _postRepository.AddAsync(post, cancellationToken);
         await _unitOfWork.SaveAsync(cancellationToken);
 
-        return ResponseModel<Guid>.Success(post.Id);
+        // Realtime: đẩy bài mới lên mọi client đang xem bảng tin
+        await _notifier.NotifyFeedAsync("post-created", new
+        {
+            postId = post.Id,
+            authorId = post.AuthorId,
+            content = post.Content,
+            status = post.Status,
+            likesCount = post.LikesCount,
+            commentsCount = post.CommentsCount,
+            sharesCount = post.SharesCount,
+            bookmarksCount = post.BookmarksCount,
+            createdDate = post.CreatedDate
+        }, cancellationToken);
+
+        return ResponseModel<Guid>.Success(post.Id,
+            moderation.IsValid ? "Post created successfully." : "Post created but flagged for review.");
     }
 }

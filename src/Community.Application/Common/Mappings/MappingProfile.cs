@@ -9,5 +9,7 @@ public class MappingProfile : Profile
     public MappingProfile()
     {
         CreateMap<Post, PostDto>();
+        CreateMap<Comment, CommentDto>();
+        CreateMap<PostReport, PostReportDto>();
     }
 }

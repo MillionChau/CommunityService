@@ -47,6 +47,9 @@ public class ExceptionHandlingMiddleware
             case NotFoundException:
                 responseCode = HttpStatusCode.NotFound;
                 break;
+            case ForbiddenException:
+                responseCode = HttpStatusCode.Forbidden;
+                break;
             case UnauthorizedAccessException:
                 responseCode = HttpStatusCode.Unauthorized;
                 break;
