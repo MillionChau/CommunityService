@@ -2,7 +2,11 @@ using Community.Application.Common.Models;
 using Community.Application.DTOs;
 using Community.Application.Features.Posts.Commands.CreatePost;
 using Community.Application.Features.Posts.Commands.DeletePost;
+using Community.Application.Features.Posts.Commands.SharePost;
+using Community.Application.Features.Posts.Commands.TogglePostBookmark;
+using Community.Application.Features.Posts.Commands.TogglePostLike;
 using Community.Application.Features.Posts.Commands.UpdatePost;
+using Community.Application.Features.Posts.Queries.GetMyBookmarks;
 using Community.Application.Features.Posts.Queries.GetPostById;
 using Community.Application.Features.Posts.Queries.GetPosts;
 using Microsoft.AspNetCore.Authorization;
@@ -60,6 +64,46 @@ public class PostsController : ApiControllerBase
     public async Task<ActionResult<ResponseModel<bool>>> Delete(Guid id, CancellationToken cancellationToken)
     {
         var result = await Mediator.Send(new DeletePostCommand { Id = id }, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>Thích / bỏ thích bài viết (FR-19) — cần đăng nhập; trả về trạng thái + số like mới.</summary>
+    [HttpPost("{id:guid}/like")]
+    [Authorize]
+    public async Task<ActionResult<ResponseModel<ToggleLikeResult>>> ToggleLike(Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await Mediator.Send(new TogglePostLikeCommand(id), cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>Lưu / bỏ lưu bài viết (FR-20) — cần đăng nhập; danh sách xem tại GET bookmarks/me.</summary>
+    [HttpPost("{id:guid}/bookmark")]
+    [Authorize]
+    public async Task<ActionResult<ResponseModel<ToggleBookmarkResult>>> ToggleBookmark(Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await Mediator.Send(new TogglePostBookmarkCommand(id), cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>Danh sách bài viết đã lưu của người dùng hiện tại (FR-20) — phân trang.</summary>
+    [HttpGet("bookmarks/me")]
+    [Authorize]
+    public async Task<ActionResult<ResponseModel<PagedResponse<PostDto>>>> GetMyBookmarks(
+        [FromQuery] GetMyBookmarksQuery query, CancellationToken cancellationToken)
+    {
+        var result = await Mediator.Send(query, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>Chia sẻ bài viết (FR-22) — cả Guest; tăng SharesCount và trả về link chia sẻ.</summary>
+    [HttpPost("{id:guid}/share")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ResponseModel<SharePostResult>>> Share(Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await Mediator.Send(new SharePostCommand(id), cancellationToken);
         return Ok(result);
     }
 }

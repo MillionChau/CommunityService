@@ -33,17 +33,20 @@ public class DeleteCommentCommandHandler : IRequestHandler<DeleteCommentCommand,
     private readonly IPostRepository _postRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
+    private readonly IRealTimeNotifier _notifier;
 
     public DeleteCommentCommandHandler(
         ICommentRepository commentRepository,
         IPostRepository postRepository,
         IUnitOfWork unitOfWork,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IRealTimeNotifier notifier)
     {
         _commentRepository = commentRepository;
         _postRepository = postRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
+        _notifier = notifier;
     }
 
     public async Task<ResponseModel<bool>> Handle(DeleteCommentCommand request, CancellationToken cancellationToken)
@@ -62,18 +65,23 @@ public class DeleteCommentCommandHandler : IRequestHandler<DeleteCommentCommand,
         comment.Status = (int)ContentStatus.Deleted;
         await _commentRepository.UpdateAsync(comment, cancellationToken);
 
-        // Giảm đếm comment của bài viết (bù lại tăng khi CreateComment)
-        if (comment.PostId.HasValue)
+        // Giảm đếm comment của bài viết (bù lại tăng khi CreateComment; int? phải coalesce)
+        Guid postId = comment.PostId ?? Guid.Empty;
+        if (postId != Guid.Empty)
         {
-            var post = await _postRepository.GetByIdAsync(comment.PostId.Value, cancellationToken);
-            if (post != null && post.CommentsCount > 0)
+            var post = await _postRepository.GetByIdAsync(postId, cancellationToken);
+            if (post != null)
             {
-                post.CommentsCount -= 1;
+                post.CommentsCount = Math.Max((post.CommentsCount ?? 0) - 1, 0);
                 await _postRepository.UpdateAsync(post, cancellationToken);
             }
         }
 
         await _unitOfWork.SaveAsync(cancellationToken);
+
+        // Realtime: client đang mở bài viết gỡ bình luận này khỏi UI ngay
+        await _notifier.NotifyPostAsync(postId, "comment-deleted", new { commentId = comment.Id }, cancellationToken);
+
         return ResponseModel<bool>.Success(true, "Comment deleted successfully.");
     }
 }
