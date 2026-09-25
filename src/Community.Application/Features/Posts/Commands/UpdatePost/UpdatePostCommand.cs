@@ -37,17 +37,20 @@ public class UpdatePostCommandHandler : IRequestHandler<UpdatePostCommand, Respo
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly IContentModerationService _moderation;
+    private readonly IRealTimeNotifier _notifier;
 
     public UpdatePostCommandHandler(
         IPostRepository postRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
-        IContentModerationService moderation)
+        IContentModerationService moderation,
+        IRealTimeNotifier notifier)
     {
         _postRepository = postRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _moderation = moderation;
+        _notifier = notifier;
     }
 
     public async Task<ResponseModel<bool>> Handle(UpdatePostCommand request, CancellationToken cancellationToken)
@@ -74,6 +77,15 @@ public class UpdatePostCommandHandler : IRequestHandler<UpdatePostCommand, Respo
 
         await _postRepository.UpdateAsync(post, cancellationToken);
         await _unitOfWork.SaveAsync(cancellationToken);
+
+        // Realtime: nội dung bài vừa đổi — client đang mở bài này sẽ cập nhật ngay
+        await _notifier.NotifyPostAsync(post.Id, "post-updated", new
+        {
+            postId = post.Id,
+            content = post.Content,
+            status = post.Status,
+            modifiedDate = post.ModifiedDate
+        }, cancellationToken);
 
         return ResponseModel<bool>.Success(true, "Post updated successfully.");
     }

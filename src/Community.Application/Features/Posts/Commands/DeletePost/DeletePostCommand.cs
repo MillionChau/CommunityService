@@ -32,15 +32,18 @@ public class DeletePostCommandHandler : IRequestHandler<DeletePostCommand, Respo
     private readonly IPostRepository _postRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
+    private readonly IRealTimeNotifier _notifier;
 
     public DeletePostCommandHandler(
         IPostRepository postRepository,
         IUnitOfWork unitOfWork,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IRealTimeNotifier notifier)
     {
         _postRepository = postRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
+        _notifier = notifier;
     }
 
     public async Task<ResponseModel<bool>> Handle(DeletePostCommand request, CancellationToken cancellationToken)
@@ -61,6 +64,10 @@ public class DeletePostCommandHandler : IRequestHandler<DeletePostCommand, Respo
 
         await _postRepository.UpdateAsync(post, cancellationToken);
         await _unitOfWork.SaveAsync(cancellationToken);
+
+        // Realtime: bài bị xóa — cả feed lẫn trang chi tiết cần biết để gỡ khỏi UI
+        await _notifier.NotifyFeedAsync("post-deleted", new { postId = post.Id }, cancellationToken);
+        await _notifier.NotifyPostAsync(post.Id, "post-deleted", new { postId = post.Id }, cancellationToken);
 
         return ResponseModel<bool>.Success(true, "Post deleted successfully.");
     }

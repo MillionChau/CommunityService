@@ -37,17 +37,20 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly IContentModerationService _moderation;
+    private readonly IRealTimeNotifier _notifier;
 
     public CreatePostCommandHandler(
         IPostRepository postRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
-        IContentModerationService moderation)
+        IContentModerationService moderation,
+        IRealTimeNotifier notifier)
     {
         _postRepository = postRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _moderation = moderation;
+        _notifier = notifier;
     }
 
     public async Task<ResponseModel<Guid>> Handle(CreatePostCommand request, CancellationToken cancellationToken)
@@ -77,6 +80,20 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
 
         await _postRepository.AddAsync(post, cancellationToken);
         await _unitOfWork.SaveAsync(cancellationToken);
+
+        // Realtime: đẩy bài mới lên mọi client đang xem bảng tin
+        await _notifier.NotifyFeedAsync("post-created", new
+        {
+            postId = post.Id,
+            authorId = post.AuthorId,
+            content = post.Content,
+            status = post.Status,
+            likesCount = post.LikesCount,
+            commentsCount = post.CommentsCount,
+            sharesCount = post.SharesCount,
+            bookmarksCount = post.BookmarksCount,
+            createdDate = post.CreatedDate
+        }, cancellationToken);
 
         return ResponseModel<Guid>.Success(post.Id,
             moderation.IsValid ? "Post created successfully." : "Post created but flagged for review.");

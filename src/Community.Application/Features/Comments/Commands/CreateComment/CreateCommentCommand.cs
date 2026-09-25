@@ -32,6 +32,7 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
     private readonly IPostRepository _postRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
+    private readonly IRealTimeNotifier _notifier;
     private readonly IMapper _mapper;
 
     public CreateCommentCommandHandler(
@@ -39,12 +40,14 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
         IPostRepository postRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
+        IRealTimeNotifier notifier,
         IMapper mapper)
     {
         _commentRepository = commentRepository;
         _postRepository = postRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
+        _notifier = notifier;
         _mapper = mapper;
     }
 
@@ -66,14 +69,18 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
             Content = request.Content
         };
 
-        // Tăng đếm số comment của bài viết
-        post.CommentsCount += 1;
+        // Tăng đếm số comment của bài viết (int? — phải coalesce null, += trên null vẫn là null)
+        post.CommentsCount = (post.CommentsCount ?? 0) + 1;
         await _postRepository.UpdateAsync(post, cancellationToken);
 
         await _commentRepository.AddAsync(comment, cancellationToken);
         await _unitOfWork.SaveAsync(cancellationToken);
 
         var dto = _mapper.Map<CommentDto>(comment);
+
+        // Realtime: đẩy bình luận mới cho mọi client đang mở bài viết này
+        await _notifier.NotifyPostAsync(request.PostId, "comment-created", dto, cancellationToken);
+
         return ResponseModel<CommentDto>.Success(dto);
     }
 }

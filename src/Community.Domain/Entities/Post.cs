@@ -17,6 +17,7 @@ namespace Community.Domain.Entities
         public int? LikesCount { get; set; }
         public int? CommentsCount { get; set; }
         public int? SharesCount { get; set; }
+        public int? BookmarksCount { get; set; }
         public int? ViewsCount { get; set; }
         public int? Type { get; set; }
         public int? Status { get; set; }

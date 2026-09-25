@@ -1,6 +1,7 @@
 using Community.Application.Common.Models;
 using Community.Application.DTOs;
 using Community.Application.Features.Comments.Commands.DeleteComment;
+using Community.Application.Features.Comments.Commands.ToggleCommentLike;
 using Community.Application.Features.Comments.Queries.GetCommentsByPost;
 using Community.Application.Features.Posts.Commands.CreateComment;
 using Microsoft.AspNetCore.Authorization;
@@ -28,6 +29,16 @@ public class CommentController : ApiControllerBase
         CancellationToken cancellationToken)
     {
         var result = await Mediator.Send(command, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>Thích / bỏ thích bình luận (FR-28) — cần đăng nhập.</summary>
+    [HttpPost("{id:guid}/like")]
+    [Authorize]
+    public async Task<ActionResult<ResponseModel<ToggleCommentLikeResult>>> ToggleLike(Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await Mediator.Send(new ToggleCommentLikeCommand(id), cancellationToken);
         return Ok(result);
     }
 

@@ -3,6 +3,7 @@ using System;
 using Community.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Community.Infrastructure.Migrations
 {
     [DbContext(typeof(CommunityDbContext))]
-    partial class CommunityDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260923062543_AddCommentsAndPostReports")]
+    partial class AddCommentsAndPostReports
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -97,41 +100,6 @@ namespace Community.Infrastructure.Migrations
                     b.ToTable("Comments", (string)null);
                 });
 
-            modelBuilder.Entity("Community.Domain.Entities.CommentLike", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CommentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ModifiedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ModifiedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("CommentId", "UserId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_CommentLikes_CommentUser");
-
-                    b.ToTable("CommentLikes", (string)null);
-                });
-
             modelBuilder.Entity("Community.Domain.Entities.Post", b =>
                 {
                     b.Property<Guid>("Id")
@@ -140,9 +108,6 @@ namespace Community.Infrastructure.Migrations
 
                     b.Property<Guid?>("AuthorId")
                         .HasColumnType("uuid");
-
-                    b.Property<int?>("BookmarksCount")
-                        .HasColumnType("integer");
 
                     b.Property<int?>("CommentsCount")
                         .HasColumnType("integer");
@@ -205,76 +170,6 @@ namespace Community.Infrastructure.Migrations
                     b.ToTable("Posts", (string)null);
                 });
 
-            modelBuilder.Entity("Community.Domain.Entities.PostBookmark", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ModifiedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ModifiedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("PostId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PostId", "UserId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_PostBookmarks_PostUser");
-
-                    b.HasIndex("UserId", "CreatedDate");
-
-                    b.ToTable("PostBookmarks", (string)null);
-                });
-
-            modelBuilder.Entity("Community.Domain.Entities.PostLike", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ModifiedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ModifiedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("PostId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("PostId", "UserId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_PostLikes_PostUser");
-
-                    b.ToTable("PostLikes", (string)null);
-                });
-
             modelBuilder.Entity("Community.Domain.Entities.PostReport", b =>
                 {
                     b.Property<Guid>("Id")
@@ -330,33 +225,6 @@ namespace Community.Infrastructure.Migrations
                         .WithMany("Comments")
                         .HasForeignKey("PostId")
                         .OnDelete(DeleteBehavior.Cascade);
-                });
-
-            modelBuilder.Entity("Community.Domain.Entities.CommentLike", b =>
-                {
-                    b.HasOne("Community.Domain.Entities.Comment", null)
-                        .WithMany()
-                        .HasForeignKey("CommentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Community.Domain.Entities.PostBookmark", b =>
-                {
-                    b.HasOne("Community.Domain.Entities.Post", null)
-                        .WithMany()
-                        .HasForeignKey("PostId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Community.Domain.Entities.PostLike", b =>
-                {
-                    b.HasOne("Community.Domain.Entities.Post", null)
-                        .WithMany()
-                        .HasForeignKey("PostId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("Community.Domain.Entities.PostReport", b =>

@@ -38,12 +38,21 @@ public class GetPostsQueryValidator : AbstractValidator<GetPostsQuery>
 public class GetPostsQueryHandler : IRequestHandler<GetPostsQuery, ResponseModel<PagedResponse<PostDto>>>
 {
     private readonly IPostRepository _postRepository;
+    private readonly IPostLikeRepository _likeRepository;
+    private readonly IPostBookmarkRepository _bookmarkRepository;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUser;
 
-    public GetPostsQueryHandler(IPostRepository postRepository, IMapper mapper, ICurrentUserService currentUser)
+    public GetPostsQueryHandler(
+        IPostRepository postRepository,
+        IPostLikeRepository likeRepository,
+        IPostBookmarkRepository bookmarkRepository,
+        IMapper mapper,
+        ICurrentUserService currentUser)
     {
         _postRepository = postRepository;
+        _likeRepository = likeRepository;
+        _bookmarkRepository = bookmarkRepository;
         _mapper = mapper;
         _currentUser = currentUser;
     }
@@ -83,6 +92,28 @@ public class GetPostsQueryHandler : IRequestHandler<GetPostsQuery, ResponseModel
             .ToListAsync(cancellationToken);
 
         var dtos = _mapper.Map<IEnumerable<PostDto>>(posts).ToList();
+
+        // Trạng thái tương tác của NGƯỜI XEM HIỆN TẠI (IsLiked/IsBookmarked) theo JWT
+        if (_currentUser.UserId is Guid viewerId)
+        {
+            var pageIds = posts.Select(p => p.Id).ToList();
+            var likedIds = (await _likeRepository
+                    .GetByExpression(l => l.UserId == viewerId && pageIds.Contains(l.PostId), cancellationToken)
+                    .Select(l => l.PostId)
+                    .ToListAsync(cancellationToken))
+                .ToHashSet();
+            var bookmarkedIds = (await _bookmarkRepository
+                    .GetByExpression(b => b.UserId == viewerId && pageIds.Contains(b.PostId), cancellationToken)
+                    .Select(b => b.PostId)
+                    .ToListAsync(cancellationToken))
+                .ToHashSet();
+
+            foreach (var dto in dtos)
+            {
+                dto.IsLikedByViewer = likedIds.Contains(dto.Id);
+                dto.IsBookmarkedByViewer = bookmarkedIds.Contains(dto.Id);
+            }
+        }
         var paged = PagedResponse<PostDto>.Create(dtos, request.Page, request.PageSize, totalCount);
 
         return ResponseModel<PagedResponse<PostDto>>.Success(paged);

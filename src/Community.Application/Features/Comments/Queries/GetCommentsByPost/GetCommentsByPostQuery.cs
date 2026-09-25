@@ -7,6 +7,7 @@ using Community.Domain.Contracts;
 using Community.Domain.Entities;
 using Community.Domain.Enums;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace Community.Application.Features.Comments.Queries.GetCommentsByPost;
 
@@ -22,17 +23,20 @@ public class GetCommentsByPostQueryHandler
 {
     private readonly ICommentRepository _commentRepository;
     private readonly IPostRepository _postRepository;
+    private readonly ICommentLikeRepository _likeRepository;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUser;
 
     public GetCommentsByPostQueryHandler(
         ICommentRepository commentRepository,
         IPostRepository postRepository,
+        ICommentLikeRepository likeRepository,
         IMapper mapper,
         ICurrentUserService currentUser)
     {
         _commentRepository = commentRepository;
         _postRepository = postRepository;
+        _likeRepository = likeRepository;
         _mapper = mapper;
         _currentUser = currentUser;
     }
@@ -56,7 +60,22 @@ public class GetCommentsByPostQueryHandler
             comments = comments.Where(c => c.Status != (int)ContentStatus.Deleted);
         }
 
-        var dtos = _mapper.Map<IEnumerable<CommentDto>>(comments);
+        var dtos = _mapper.Map<IEnumerable<CommentDto>>(comments).ToList();
+
+        // Người xem hiện tại đã thích những bình luận nào (IsLikedByViewer) theo JWT
+        if (_currentUser.UserId is Guid viewerId && dtos.Count > 0)
+        {
+            var commentIds = dtos.Select(c => c.Id).ToList();
+            var likedIds = (await _likeRepository
+                    .GetByExpression(l => l.UserId == viewerId && commentIds.Contains(l.CommentId), cancellationToken)
+                    .Select(l => l.CommentId)
+                    .ToListAsync(cancellationToken))
+                .ToHashSet();
+
+            foreach (var dto in dtos)
+                dto.IsLikedByViewer = likedIds.Contains(dto.Id);
+        }
+
         return ResponseModel<IEnumerable<CommentDto>>.Success(dtos);
     }
 }
