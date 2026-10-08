@@ -2,6 +2,7 @@ using Community.Application.Common.Models;
 using Community.Application.DTOs;
 using Community.Application.Features.Posts.Commands.CreatePost;
 using Community.Application.Features.Posts.Commands.DeletePost;
+using Community.Application.Features.Posts.Commands.PinPost;
 using Community.Application.Features.Posts.Commands.SharePost;
 using Community.Application.Features.Posts.Commands.TogglePostBookmark;
 using Community.Application.Features.Posts.Commands.TogglePostLike;
@@ -104,6 +105,16 @@ public class PostsController : ApiControllerBase
         CancellationToken cancellationToken)
     {
         var result = await Mediator.Send(new SharePostCommand(id), cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>Ghim / bỏ ghim bài viết nổi bật (UC-72) — tác giả hoặc Admin.</summary>
+    [HttpPost("{id:guid}/pin")]
+    [Authorize]
+    public async Task<ActionResult<ResponseModel<bool>>> Pin(Guid id, [FromQuery] bool isPinned = true,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await Mediator.Send(new PinPostCommand { Id = id, IsPinned = isPinned }, cancellationToken);
         return Ok(result);
     }
 }

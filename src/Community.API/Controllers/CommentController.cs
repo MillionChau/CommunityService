@@ -2,12 +2,14 @@ using Community.Application.Common.Models;
 using Community.Application.DTOs;
 using Community.Application.Features.Comments.Commands.DeleteComment;
 using Community.Application.Features.Comments.Commands.ToggleCommentLike;
+using Community.Application.Features.Comments.Commands.UpdateComment;
 using Community.Application.Features.Comments.Queries.GetCommentsByPost;
 using Community.Application.Features.Posts.Commands.CreateComment;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Community.API.Controllers;
+
 [ApiController]
 [Route("api/[controller]")]
 public class CommentController : ApiControllerBase
@@ -39,6 +41,16 @@ public class CommentController : ApiControllerBase
         CancellationToken cancellationToken)
     {
         var result = await Mediator.Send(new ToggleCommentLikeCommand(id), cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>Chỉnh sửa nội dung bình luận (UC-33) — tác giả bình luận.</summary>
+    [HttpPut("{id:guid}")]
+    [Authorize]
+    public async Task<ActionResult<ResponseModel<bool>>> Update(Guid id, [FromBody] UpdateCommentCommand command, CancellationToken cancellationToken)
+    {
+        var cmd = command with { Id = id };
+        var result = await Mediator.Send(cmd, cancellationToken);
         return Ok(result);
     }
 
