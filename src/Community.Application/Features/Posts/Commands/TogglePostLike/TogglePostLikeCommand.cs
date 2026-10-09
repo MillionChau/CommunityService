@@ -35,19 +35,22 @@ public class TogglePostLikeCommandHandler : IRequestHandler<TogglePostLikeComman
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly IRealTimeNotifier _notifier;
+    private readonly INotificationClient _notificationClient;
 
     public TogglePostLikeCommandHandler(
         IPostRepository postRepository,
         IPostLikeRepository likeRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
-        IRealTimeNotifier notifier)
+        IRealTimeNotifier notifier,
+        INotificationClient notificationClient)
     {
         _postRepository = postRepository;
         _likeRepository = likeRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _notifier = notifier;
+        _notificationClient = notificationClient;
     }
 
     public async Task<ResponseModel<ToggleLikeResult>> Handle(TogglePostLikeCommand request,
@@ -87,6 +90,22 @@ public class TogglePostLikeCommandHandler : IRequestHandler<TogglePostLikeComman
             new { postId = post.Id, likesCount = result.LikesCount }, cancellationToken);
         await _notifier.NotifyPostAsync(post.Id, "post-like-changed",
             new { postId = post.Id, isLiked, likesCount = result.LikesCount }, cancellationToken);
+
+        // Thông báo cho tác giả bài viết khi được like (UC-19, FR-29) — bỏ qua like lại của chính tác giả
+        if (isLiked && post.AuthorId is { } postAuthorId && postAuthorId != userId)
+        {
+            await _notificationClient.SendAsync(new NotificationOutbound
+            {
+                RecipientId = postAuthorId,
+                Type = NotificationTypes.PostLiked,
+                Content = $"{_currentUser.UserName ?? "Ai đó"} đã thích bài viết của bạn.",
+                LinkUrl = $"/posts/{post.Id}",
+                RelatedEntityId = post.Id,
+                RelatedPostId = post.Id,
+                ActorId = userId,
+                ActorName = _currentUser.UserName
+            }, cancellationToken);
+        }
 
         return ResponseModel<ToggleLikeResult>.Success(result,
             isLiked ? "Post liked." : "Like removed.");

@@ -33,6 +33,7 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly IRealTimeNotifier _notifier;
+    private readonly INotificationClient _notificationClient;
     private readonly IMapper _mapper;
 
     public CreateCommentCommandHandler(
@@ -41,6 +42,7 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
         IRealTimeNotifier notifier,
+        INotificationClient notificationClient,
         IMapper mapper)
     {
         _commentRepository = commentRepository;
@@ -48,6 +50,7 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _notifier = notifier;
+        _notificationClient = notificationClient;
         _mapper = mapper;
     }
 
@@ -80,6 +83,52 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
 
         // Realtime: đẩy bình luận mới cho mọi client đang mở bài viết này
         await _notifier.NotifyPostAsync(request.PostId, "comment-created", dto, cancellationToken);
+
+        // ===== Thông báo tương tác trực tiếp (UC-19: Notification Service) =====
+        var actorName = _currentUser.UserName ?? "Ai đó";
+        var notifications = new List<NotificationOutbound>();
+
+        // 1. Reply comment → ưu tiên thông báo cho tác giả comment cha (FR-25)
+        if (request.ParentCommentId is { } parentId)
+        {
+            var parentComment = _commentRepository.GetByExpression(c => c.Id == parentId)
+                .FirstOrDefault();
+            if (parentComment?.AuthorId is { } parentAuthorId && parentAuthorId != _currentUser.UserId)
+            {
+                notifications.Add(new NotificationOutbound
+                {
+                    RecipientId = parentAuthorId,
+                    Type = NotificationTypes.CommentReplied,
+                    Content = $"{actorName} đã trả lời bình luận của bạn.",
+                    LinkUrl = $"/posts/{post.Id}#comment-{parentId}",
+                    RelatedEntityId = parentId,
+                    RelatedPostId = post.Id,
+                    ActorId = _currentUser.UserId!.Value,
+                    ActorName = _currentUser.UserName
+                });
+            }
+        }
+
+        // 2. Comment bài viết → thông báo cho tác giả bài (FR-24), trừ khi chính tác giả tự bình luận
+        if (post.AuthorId is { } postAuthorId
+            && postAuthorId != _currentUser.UserId
+            && !notifications.Any(n => n.RecipientId == postAuthorId))
+        {
+            notifications.Add(new NotificationOutbound
+            {
+                RecipientId = postAuthorId,
+                Type = NotificationTypes.PostCommented,
+                Content = $"{actorName} đã bình luận về bài viết của bạn.",
+                LinkUrl = $"/posts/{post.Id}#comment-{comment.Id}",
+                RelatedEntityId = comment.Id,
+                RelatedPostId = post.Id,
+                ActorId = _currentUser.UserId!.Value,
+                ActorName = _currentUser.UserName
+            });
+        }
+
+        if (notifications.Count > 0)
+            await _notificationClient.SendManyAsync(notifications, cancellationToken);
 
         return ResponseModel<CommentDto>.Success(dto);
     }
