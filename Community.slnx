@@ -5,4 +5,7 @@
     <Project Path="src/Community.Domain/Community.Domain.csproj" />
     <Project Path="src/Community.Infrastructure/Community.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Community.UnitTests/Community.UnitTests.csproj" />
+  </Folder>
 </Solution>
