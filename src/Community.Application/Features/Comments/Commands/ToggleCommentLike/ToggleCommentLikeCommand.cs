@@ -33,19 +33,22 @@ public class ToggleCommentLikeCommandHandler : IRequestHandler<ToggleCommentLike
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly IRealTimeNotifier _notifier;
+    private readonly INotificationClient _notificationClient;
 
     public ToggleCommentLikeCommandHandler(
         ICommentRepository commentRepository,
         ICommentLikeRepository likeRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
-        IRealTimeNotifier notifier)
+        IRealTimeNotifier notifier,
+        INotificationClient notificationClient)
     {
         _commentRepository = commentRepository;
         _likeRepository = likeRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _notifier = notifier;
+        _notificationClient = notificationClient;
     }
 
     public async Task<ResponseModel<ToggleCommentLikeResult>> Handle(ToggleCommentLikeCommand request,
@@ -86,6 +89,22 @@ public class ToggleCommentLikeCommandHandler : IRequestHandler<ToggleCommentLike
         {
             await _notifier.NotifyPostAsync(comment.PostId.Value, "comment-like-changed",
                 new { commentId = comment.Id, isLiked, likesCount = result.LikesCount }, cancellationToken);
+        }
+
+        // Thông báo cho tác giả bình luận khi được like (FR-28) — bỏ qua like lại của chính tác giả
+        if (isLiked && comment.AuthorId is { } commentAuthorId && commentAuthorId != userId)
+        {
+            await _notificationClient.SendAsync(new NotificationOutbound
+            {
+                RecipientId = commentAuthorId,
+                Type = NotificationTypes.PostLiked,
+                Content = $"{_currentUser.UserName ?? "Ai đó"} đã thích bình luận của bạn.",
+                LinkUrl = $"/posts/{comment.PostId}#comment-{comment.Id}",
+                RelatedEntityId = comment.Id,
+                RelatedPostId = comment.PostId,
+                ActorId = userId,
+                ActorName = _currentUser.UserName
+            }, cancellationToken);
         }
 
         return ResponseModel<ToggleCommentLikeResult>.Success(result,

@@ -43,6 +43,7 @@ public class CreatePostReportCommandHandler : IRequestHandler<CreatePostReportCo
     private readonly IPostRepository _postRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
+    private readonly INotificationClient _notificationClient;
     private readonly IMapper _mapper;
 
     public CreatePostReportCommandHandler(
@@ -50,12 +51,14 @@ public class CreatePostReportCommandHandler : IRequestHandler<CreatePostReportCo
         IPostRepository postRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
+        INotificationClient notificationClient,
         IMapper mapper)
     {
         _postReportRepository = postReportRepository;
         _postRepository = postRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
+        _notificationClient = notificationClient;
         _mapper = mapper;
     }
 
@@ -94,6 +97,22 @@ public class CreatePostReportCommandHandler : IRequestHandler<CreatePostReportCo
 
         await _postReportRepository.AddAsync(postReport, cancellationToken);
         await _unitOfWork.SaveAsync(cancellationToken);
+
+        // ===== Đẩy báo cáo vào hàng chờ duyệt của Admin (UC-23 + Notification Service) =====
+        // RecipientId = Guid.Empty là cờ "cho toàn bộ Admin" — NotificationService broadcast
+        // PendingReport vào group "admins" và phục vụ qua GET /api/admin/notifications/pending-reports
+        await _notificationClient.SendAsync(new NotificationOutbound
+        {
+            RecipientId = NotificationTypes.AdminQueueRecipient,
+            Type = NotificationTypes.PendingReport,
+            Content = $"Báo cáo vi phạm mới từ {_currentUser.UserName ?? "người dùng"}: {request.Reason}",
+            LinkUrl = $"/admin/reports/{postReport.Id}",
+            SourceService = "community",
+            RelatedEntityId = postReport.Id,
+            RelatedPostId = request.PostId,
+            ActorId = reporterId,
+            ActorName = _currentUser.UserName
+        }, cancellationToken);
 
         var dto = _mapper.Map<PostReportDto>(postReport);
         return ResponseModel<PostReportDto>.Success(dto, "Report submitted successfully.");

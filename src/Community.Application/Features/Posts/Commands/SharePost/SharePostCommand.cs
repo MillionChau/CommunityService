@@ -30,15 +30,21 @@ public class SharePostCommandHandler : IRequestHandler<SharePostCommand, Respons
     private readonly IPostRepository _postRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IRealTimeNotifier _notifier;
+    private readonly INotificationClient _notificationClient;
+    private readonly ICurrentUserService _currentUser;
 
     public SharePostCommandHandler(
         IPostRepository postRepository,
         IUnitOfWork unitOfWork,
-        IRealTimeNotifier notifier)
+        IRealTimeNotifier notifier,
+        INotificationClient notificationClient,
+        ICurrentUserService currentUser)
     {
         _postRepository = postRepository;
         _unitOfWork = unitOfWork;
         _notifier = notifier;
+        _notificationClient = notificationClient;
+        _currentUser = currentUser;
     }
 
     public async Task<ResponseModel<SharePostResult>> Handle(SharePostCommand request, CancellationToken cancellationToken)
@@ -61,6 +67,25 @@ public class SharePostCommandHandler : IRequestHandler<SharePostCommand, Respons
             new { postId = post.Id, sharesCount = result.SharesCount }, cancellationToken);
         await _notifier.NotifyPostAsync(post.Id, "post-shared",
             new { postId = post.Id, sharesCount = result.SharesCount }, cancellationToken);
+
+        // Thông báo cho tác giả (FR-22 + UC-19) — chỉ khi người share khác tác giả và đã đăng nhập
+        if (_currentUser.IsAuthenticated
+            && _currentUser.UserId is { } sharerId
+            && post.AuthorId is { } postAuthorId
+            && postAuthorId != sharerId)
+        {
+            await _notificationClient.SendAsync(new NotificationOutbound
+            {
+                RecipientId = postAuthorId,
+                Type = NotificationTypes.PostShared,
+                Content = $"{_currentUser.UserName ?? "Ai đó"} đã chia sẻ bài viết của bạn.",
+                LinkUrl = $"/posts/{post.Id}",
+                RelatedEntityId = post.Id,
+                RelatedPostId = post.Id,
+                ActorId = sharerId,
+                ActorName = _currentUser.UserName
+            }, cancellationToken);
+        }
 
         return ResponseModel<SharePostResult>.Success(result, "Post shared successfully.");
     }
