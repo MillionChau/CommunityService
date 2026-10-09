@@ -41,17 +41,21 @@ public class ReviewPostReportCommandHandler : IRequestHandler<ReviewPostReportCo
     private readonly IPostRepository _postRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
+    private readonly INotificationClient _notificationClient;
 
     public ReviewPostReportCommandHandler(
         IPostReportRepository postReportRepository,
         IPostRepository postRepository,
         IUnitOfWork unitOfWork,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        INotificationClient notificationClient)
     {
         _postReportRepository = postReportRepository;
         _postRepository = postRepository;
+        _postRepository = postRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
+        _notificationClient = notificationClient;
     }
 
     public async Task<ResponseModel<bool>> Handle(ReviewPostReportCommand request, CancellationToken cancellationToken)
@@ -82,6 +86,25 @@ public class ReviewPostReportCommandHandler : IRequestHandler<ReviewPostReportCo
         }
 
         await _unitOfWork.SaveAsync(cancellationToken);
+
+        // ===== Thông báo kết quả duyệt cho reporter (FR-29 + UC-23) =====
+        await _notificationClient.SendAsync(new NotificationOutbound
+        {
+            RecipientId = report.ReporterId,
+            Type = request.Approve ? NotificationTypes.PostHidden : NotificationTypes.ReportReviewed,
+            Content = request.Approve
+                ? $"Báo cáo của bạn về bài viết đã được chấp nhận — bài viết đã bị ẩn."
+                : "Báo cáo của bạn đã được xem xét — bài viết không vi phạm.",
+            LinkUrl = $"/posts/{report.PostId}",
+            RelatedEntityId = report.Id,
+            RelatedPostId = report.PostId,
+            ActorId = _currentUser.UserId,
+            ActorName = _currentUser.UserName
+        }, cancellationToken);
+
+        // Gỡ báo cáo khỏi hàng chờ PendingReport của NotificationService
+        await _notificationClient.ResolvePendingReportAsync(report.Id, cancellationToken);
+
         return ResponseModel<bool>.Success(true,
             request.Approve ? "Report approved. Post has been hidden." : "Report rejected.");
     }
