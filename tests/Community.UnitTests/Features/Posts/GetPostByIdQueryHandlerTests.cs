@@ -121,4 +121,62 @@ public class GetPostByIdQueryHandlerTests
         Assert.Equal(78, result.Data.BookmarksCount);
         Assert.Equal(99, result.Data.ViewsCount);
     }
+
+    [Fact]
+    public async Task Handle_WhenPostIsDraft_AndViewerIsNotAuthorNorAdmin_ShouldThrowNotFound()
+    {
+        // Arrange — Người lạ không được xem bài viết đang ở trạng thái Draft
+        var authorId = Guid.NewGuid();
+        var strangerId = Guid.NewGuid();
+        var draftPost = TestFixture.CreatePost(authorId: authorId, status: (int)ContentStatus.Draft);
+        _f.PostRepository.Setup(r => r.GetByIdAsync(draftPost.Id, It.IsAny<CancellationToken>())).ReturnsAsync(draftPost);
+
+        _f.LoginAs(strangerId, "stranger", isAdmin: false);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            BuildHandler().Handle(new GetPostByIdQuery(draftPost.Id), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Handle_WhenPostIsDraft_AndViewerIsAuthor_ShouldSucceed()
+    {
+        // Arrange — Tác giả xem được bài nháp của chính mình
+        var authorId = Guid.NewGuid();
+        var draftPost = TestFixture.CreatePost(authorId: authorId, status: (int)ContentStatus.Draft);
+        _f.PostRepository.Setup(r => r.GetByIdAsync(draftPost.Id, It.IsAny<CancellationToken>())).ReturnsAsync(draftPost);
+
+        _f.LoginAs(authorId, "author", isAdmin: false);
+        SetupLikeRepo(_f.PostLikeRepository, new List<PostLike>());
+        SetupBookmarkRepo(_f.PostBookmarkRepository, new List<PostBookmark>());
+
+        // Act
+        var result = await BuildHandler().Handle(new GetPostByIdQuery(draftPost.Id), CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal(draftPost.Id, result.Data!.Id);
+        Assert.Equal((int)ContentStatus.Draft, result.Data.Status);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPostIsDraft_AndViewerIsAdmin_ShouldSucceed()
+    {
+        // Arrange — Admin có quyền xem bài nháp
+        var authorId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        var draftPost = TestFixture.CreatePost(authorId: authorId, status: (int)ContentStatus.Draft);
+        _f.PostRepository.Setup(r => r.GetByIdAsync(draftPost.Id, It.IsAny<CancellationToken>())).ReturnsAsync(draftPost);
+
+        _f.LoginAs(adminId, "admin", isAdmin: true);
+        SetupLikeRepo(_f.PostLikeRepository, new List<PostLike>());
+        SetupBookmarkRepo(_f.PostBookmarkRepository, new List<PostBookmark>());
+
+        // Act
+        var result = await BuildHandler().Handle(new GetPostByIdQuery(draftPost.Id), CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal(draftPost.Id, result.Data!.Id);
+    }
 }

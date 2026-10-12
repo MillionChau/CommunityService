@@ -136,4 +136,76 @@ public class CreatePostCommandHandlerTests
 
         _f.PostRepository.Verify(r => r.AddAsync(It.IsAny<Post>(), It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task Handle_WhenIsDraftTrue_ShouldSaveAsDraft_WithoutModerationOrRealtimeNotify()
+    {
+        // Arrange (UC-18): lưu nháp không được gọi AI moderation và không broadcast SignalR feed
+        var authorId = Guid.NewGuid();
+        _f.LoginAs(authorId, "alice");
+
+        var handler = new CreatePostCommandHandler(
+            _f.PostRepository.Object, _f.UnitOfWork.Object, _f.CurrentUser.Object,
+            _f.Moderation.Object, _f.Notifier.Object);
+
+        // Act
+        var result = await handler.Handle(
+            new CreatePostCommand { Content = "Bài viết nháp đang soạn", IsDraft = true },
+            CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(Guid.Empty, result.Data);
+        Assert.Equal("Draft saved successfully.", result.Message);
+
+        _f.PostRepository.Verify(r => r.AddAsync(It.Is<Post>(p =>
+            p.AuthorId == authorId &&
+            p.Status == (int)ContentStatus.Draft &&
+            p.Content == "Bài viết nháp đang soạn" &&
+            p.LikesCount == 0 && p.CommentsCount == 0 &&
+            p.SharesCount == 0 && p.ViewsCount == 0), It.IsAny<CancellationToken>()), Times.Once);
+
+        _f.UnitOfWork.Verify(u => u.SaveAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _f.Moderation.Verify(m => m.CheckAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _f.Notifier.Verify(n => n.NotifyFeedAsync(It.IsAny<string>(), It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenIsDraftTrue_AndUnauthenticated_ShouldThrowUnauthorized()
+    {
+        // Arrange
+        _f.Logout();
+        var handler = new CreatePostCommandHandler(
+            _f.PostRepository.Object, _f.UnitOfWork.Object, _f.CurrentUser.Object,
+            _f.Moderation.Object, _f.Notifier.Object);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            handler.Handle(new CreatePostCommand { Content = "bài nháp", IsDraft = true }, CancellationToken.None));
+
+        _f.PostRepository.Verify(r => r.AddAsync(It.IsAny<Post>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenIsDraftTrue_ShouldUseJwtAuthorId()
+    {
+        // Arrange
+        var jwtUserId = Guid.NewGuid();
+        var spoofedBodyUserId = Guid.NewGuid();
+        _f.LoginAs(jwtUserId, "alice");
+
+        var handler = new CreatePostCommandHandler(
+            _f.PostRepository.Object, _f.UnitOfWork.Object, _f.CurrentUser.Object,
+            _f.Moderation.Object, _f.Notifier.Object);
+
+        // Act
+        await handler.Handle(
+            new CreatePostCommand { Content = "bản nháp", AuthorId = spoofedBodyUserId, IsDraft = true },
+            CancellationToken.None);
+
+        // Assert
+        _f.PostRepository.Verify(r => r.AddAsync(It.Is<Post>(p =>
+            p.AuthorId == jwtUserId && p.AuthorId != spoofedBodyUserId &&
+            p.Status == (int)ContentStatus.Draft), It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

@@ -10,6 +10,7 @@ public class PostDto
     public int? SharesCount { get; set; }
     public int? BookmarksCount { get; set; }
     public int? ViewsCount { get; set; }
+    public int? Status { get; set; }
 
     // Trạng thái tương tác của NGƯỜI XEM HIỆN TẠI (điền trong handler theo JWT, không map từ entity)
     public bool IsLikedByViewer { get; set; }
