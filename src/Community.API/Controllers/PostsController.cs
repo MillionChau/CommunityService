@@ -7,6 +7,7 @@ using Community.Application.Features.Posts.Commands.SharePost;
 using Community.Application.Features.Posts.Commands.TogglePostBookmark;
 using Community.Application.Features.Posts.Commands.TogglePostLike;
 using Community.Application.Features.Posts.Commands.UpdatePost;
+using Community.Application.Features.Posts.Queries.GetDrafts;
 using Community.Application.Features.Posts.Queries.GetMyBookmarks;
 using Community.Application.Features.Posts.Queries.GetPostById;
 using Community.Application.Features.Posts.Queries.GetPosts;
@@ -93,6 +94,16 @@ public class PostsController : ApiControllerBase
     [Authorize]
     public async Task<ActionResult<ResponseModel<PagedResponse<PostDto>>>> GetMyBookmarks(
         [FromQuery] GetMyBookmarksQuery query, CancellationToken cancellationToken)
+    {
+        var result = await Mediator.Send(query, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>Danh sách bài viết bản nháp của người dùng hiện tại (UC-18) — phân trang.</summary>
+    [HttpGet("drafts")]
+    [Authorize]
+    public async Task<ActionResult<ResponseModel<PagedResponse<PostDto>>>> GetDrafts(
+        [FromQuery] GetDraftPostsQuery query, CancellationToken cancellationToken)
     {
         var result = await Mediator.Send(query, cancellationToken);
         return Ok(result);

@@ -5,6 +5,7 @@ using Community.Application.DTOs;
 using Community.Application.Interfaces;
 using Community.Domain.Contracts;
 using Community.Domain.Entities;
+using Community.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,6 +40,16 @@ public class GetPostByIdQueryHandler : IRequestHandler<GetPostByIdQuery, Respons
         var post = await _postRepository.GetByIdAsync(request.Id, cancellationToken);
         if (post == null)
             throw new NotFoundException(nameof(Post), request.Id);
+
+        // Bảo vệ quyền riêng tư bản nháp (UC-18): Chỉ tác giả hoặc Admin mới có quyền xem bài nháp
+        if (post.Status == (int)ContentStatus.Draft)
+        {
+            if (!_currentUser.IsAuthenticated ||
+                (_currentUser.UserId != post.AuthorId && !_currentUser.IsAdmin))
+            {
+                throw new NotFoundException(nameof(Post), request.Id);
+            }
+        }
 
         var dto = _mapper.Map<PostDto>(post);
 

@@ -19,11 +19,17 @@ public class PostBookmarkConfiguration : IEntityTypeConfiguration<PostBookmark>
 
         // Truy vấn chính: "danh sách đã lưu của user" (GetMyBookmarks)
         builder.HasIndex(b => new { b.UserId, b.CreatedDate });
+        builder.HasIndex(b => new { b.UserId, b.FolderId });
 
         // Bookmark gắn với Post khai báo ở PostConfiguration (Restrict)
         builder.HasOne<Post>()
             .WithMany()
             .HasForeignKey(b => b.PostId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(b => b.Folder)
+            .WithMany(f => f.Bookmarks)
+            .HasForeignKey(b => b.FolderId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

@@ -37,8 +37,15 @@ public static class DependencyInjection
         services.AddScoped<Community.Domain.Interfaces.IUnitOfWork>(sp => sp.GetRequiredService<IUnitOfWork>());
         services.AddScoped<ICurrentUserService, CurrentUserService>();
 
-        // Kiểm duyệt nội dung: stub hiện tại, sẽ thay bằng QualityService HttpClient ở phiên sau
-        services.AddScoped<IContentModerationService, StubContentModerationService>();
+        // Kiểm duyệt nội dung AI: gọi sang QualityService thực tế (với Fallback degrade an toàn - Phase 4)
+        services.AddHttpClient<IContentModerationService, HttpContentModerationService>();
+
+        // ===== NotificationService client (best-effort, timeout ngắn) =====
+        services.AddHttpClient<Community.Application.Interfaces.INotificationClient, NotificationHttpClient>(client =>
+        {
+            client.BaseAddress = new Uri(configuration["NotificationService:BaseUrl"] ?? "http://localhost:5003");
+            client.Timeout = TimeSpan.FromSeconds(3); // không được phép treo luồng like/comment vì notification
+        });
 
         // Quét tự động bằng Scrutor để đăng ký các class kết thúc bằng Repository hoặc Service
         services.Scan(scan => scan

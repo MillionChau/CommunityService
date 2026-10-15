@@ -12,7 +12,7 @@ namespace Community.Application.Features.Posts.Commands.TogglePostBookmark;
 /// <summary>Kết quả toggle bookmark trả về cho client.</summary>
 public record ToggleBookmarkResult(Guid PostId, bool IsBookmarked, int BookmarksCount);
 
-public record TogglePostBookmarkCommand(Guid PostId) : IRequest<ResponseModel<ToggleBookmarkResult>>;
+public record TogglePostBookmarkCommand(Guid PostId, Guid? FolderId = null) : IRequest<ResponseModel<ToggleBookmarkResult>>;
 
 public class TogglePostBookmarkCommandValidator : AbstractValidator<TogglePostBookmarkCommand>
 {
@@ -23,9 +23,8 @@ public class TogglePostBookmarkCommandValidator : AbstractValidator<TogglePostBo
 }
 
 /// <summary>
-/// Lưu / bỏ lưu bài viết (FR-20 / UC-20). Toggle: thêm PostBookmark khi lưu,
-/// xóa khi bỏ lưu. Unique index (PostId, UserId) chống lưu trùng ở tầng DB.
-/// FR-21 (phân loại vào bộ sưu tập) nằm ngoài phạm vi hiện tại.
+/// Lưu / bỏ lưu bài viết (FR-20 / UC-20, UC-21). Toggle: thêm PostBookmark khi lưu,
+/// xóa khi bỏ lưu. Hỗ trợ phân loại vào Folder nếu FolderId được chỉ định (UC-21).
 /// </summary>
 public class TogglePostBookmarkCommandHandler : IRequestHandler<TogglePostBookmarkCommand, ResponseModel<ToggleBookmarkResult>>
 {
@@ -65,9 +64,22 @@ public class TogglePostBookmarkCommandHandler : IRequestHandler<TogglePostBookma
         if (existing == null)
         {
             await _bookmarkRepository.AddAsync(
-                new PostBookmark { Id = Guid.NewGuid(), PostId = request.PostId, UserId = userId },
+                new PostBookmark
+                {
+                    Id = Guid.NewGuid(),
+                    PostId = request.PostId,
+                    UserId = userId,
+                    FolderId = request.FolderId
+                },
                 cancellationToken);
             post.BookmarksCount = (post.BookmarksCount ?? 0) + 1;
+            isBookmarked = true;
+        }
+        else if (request.FolderId.HasValue && existing.FolderId != request.FolderId)
+        {
+            // Cập nhật thư mục cho bookmark hiện có
+            existing.FolderId = request.FolderId;
+            await _bookmarkRepository.UpdateAsync(existing, cancellationToken);
             isBookmarked = true;
         }
         else

@@ -37,6 +37,9 @@ builder.Services.AddSingleton<IRealTimeNotifier, SignalRNotifier>();
 
 var app = builder.Build();
 
+// Request logging: đặt ĐẦU pipeline để log mọi request kèm thời gian phản hồi
+app.UseMiddleware<Community.API.Middleware.RequestLoggingMiddleware>();
+
 app.UseMiddleware<Community.API.Middleware.ExceptionHandlingMiddleware>();
 
 // Configure the HTTP request pipeline.
