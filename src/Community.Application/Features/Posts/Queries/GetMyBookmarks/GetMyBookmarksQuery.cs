@@ -15,6 +15,8 @@ public record GetMyBookmarksQuery : IRequest<ResponseModel<PagedResponse<PostDto
     public int Page { get; init; } = 1;
     /// <summary>Số bản ghi mỗi trang (mặc định 10, tối đa 50).</summary>
     public int PageSize { get; init; } = 10;
+    /// <summary>Lọc theo thư mục lưu trữ (UC-21). Null = tất cả.</summary>
+    public Guid? FolderId { get; init; }
 }
 
 public class GetMyBookmarksQueryValidator : AbstractValidator<GetMyBookmarksQuery>
@@ -27,9 +29,8 @@ public class GetMyBookmarksQueryValidator : AbstractValidator<GetMyBookmarksQuer
 }
 
 /// <summary>
-/// Danh sách bài viết đã lưu của người dùng hiện tại (FR-20 / UC-20),
-/// sắp xếp theo thời điểm lưu mới nhất, có phân trang.
-/// FR-21 (phân loại vào bộ sưu tập/thư mục) nằm ngoài phạm vi hiện tại.
+/// Danh sách bài viết đã lưu của người dùng hiện tại (FR-20 / UC-20, UC-21),
+/// sắp xếp theo thời điểm lưu mới nhất, có phân trang và hỗ trợ lọc theo thư mục (UC-21).
 /// </summary>
 public class GetMyBookmarksQueryHandler : IRequestHandler<GetMyBookmarksQuery, ResponseModel<PagedResponse<PostDto>>>
 {
@@ -57,7 +58,9 @@ public class GetMyBookmarksQueryHandler : IRequestHandler<GetMyBookmarksQuery, R
             throw new UnauthorizedAccessException("Authentication is required.");
         var userId = _currentUser.UserId.Value;
 
-        var bookmarksQuery = _bookmarkRepository.GetByExpression(b => b.UserId == userId, cancellationToken);
+        var bookmarksQuery = _bookmarkRepository.GetByExpression(
+            b => b.UserId == userId && (!request.FolderId.HasValue || b.FolderId == request.FolderId.Value),
+            cancellationToken);
 
         var totalCount = await bookmarksQuery.CountAsync(cancellationToken);
 
@@ -81,6 +84,7 @@ public class GetMyBookmarksQueryHandler : IRequestHandler<GetMyBookmarksQuery, R
             {
                 var dto = _mapper.Map<PostDto>(postsById[b.PostId]);
                 dto.IsBookmarkedByViewer = true; // đương nhiên: đây là danh sách đã lưu
+                dto.BookmarkFolderId = b.FolderId;
                 return dto;
             })
             .ToList();

@@ -13,5 +13,7 @@ namespace Community.Domain.Entities
     {
         public Guid PostId { get; set; }
         public Guid UserId { get; set; }
+        public Guid? FolderId { get; set; }
+        public virtual BookmarkFolder? Folder { get; set; }
     }
 }
