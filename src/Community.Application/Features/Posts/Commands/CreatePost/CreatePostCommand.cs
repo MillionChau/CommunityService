@@ -17,6 +17,10 @@ public record CreatePostCommand : IRequest<ResponseModel<Guid>>
     /// Cờ lưu nháp bài viết (UC-18). Mặc định false (đăng bài công khai).
     /// </summary>
     public bool IsDraft { get; init; } = false;
+    /// <summary>TechZone liên kết (UC-14). Null = không gán.</summary>
+    public Guid? TechZoneId { get; init; }
+    /// <summary>Tag công nghệ (UC-13). Ví dụ: "dotnet,csharp".</summary>
+    public string? Tags { get; init; }
 }
 
 public class CreatePostCommandValidator : AbstractValidator<CreatePostCommand>
@@ -32,6 +36,10 @@ public class CreatePostCommandValidator : AbstractValidator<CreatePostCommand>
         RuleFor(v => v.Content)
             .MaximumLength(2000)
             .WithMessage("Content must not exceed 2000 characters.");
+
+        RuleFor(v => v.Tags)
+            .MaximumLength(500)
+            .WithMessage("Tags must not exceed 500 characters.");
     }
 }
 
@@ -45,6 +53,7 @@ public class CreatePostCommandValidator : AbstractValidator<CreatePostCommand>
 public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, ResponseModel<Guid>>
 {
     private readonly IPostRepository _postRepository;
+    private readonly ITechZoneRepository? _techZoneRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly IContentModerationService _moderation;
@@ -55,9 +64,11 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
         IContentModerationService moderation,
-        IRealTimeNotifier notifier)
+        IRealTimeNotifier notifier,
+        ITechZoneRepository? techZoneRepository = null)
     {
         _postRepository = postRepository;
+        _techZoneRepository = techZoneRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _moderation = moderation;
@@ -82,6 +93,8 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
                 Id = Guid.NewGuid(),
                 Content = content,
                 AuthorId = authorId,
+                TechZoneId = request.TechZoneId,
+                Tags = request.Tags?.Trim(),
                 Status = (int)ContentStatus.Draft,
                 LikesCount = 0,
                 CommentsCount = 0,
@@ -104,12 +117,24 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
             Id = Guid.NewGuid(),
             Content = content,
             AuthorId = authorId,
+            TechZoneId = request.TechZoneId,
+            Tags = request.Tags?.Trim(),
             Status = moderation.IsValid ? (int)ContentStatus.Published : (int)ContentStatus.Hidden,
             LikesCount = 0,
             CommentsCount = 0,
             SharesCount = 0,
             ViewsCount = 0
         };
+
+        if (request.TechZoneId.HasValue && _techZoneRepository != null)
+        {
+            var zone = await _techZoneRepository.GetByIdAsync(request.TechZoneId.Value, cancellationToken);
+            if (zone != null)
+            {
+                zone.PostsCount += 1;
+                await _techZoneRepository.UpdateAsync(zone, cancellationToken);
+            }
+        }
 
         await _postRepository.AddAsync(post, cancellationToken);
         await _unitOfWork.SaveAsync(cancellationToken);

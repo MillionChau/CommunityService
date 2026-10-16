@@ -34,8 +34,13 @@ public class GetPostsQueryHandlerTests
             .Returns((Expression<Func<PostBookmark, bool>>? expr, CancellationToken _) =>
                 expr == null ? _f.ToEmptyAsyncQueryable<PostBookmark>() : _f.ToEmptyAsyncQueryable<PostBookmark>().Where(expr));
 
+        _f.TechZoneRepository
+            .Setup(r => r.GetByExpression(It.IsAny<Expression<Func<TechZone, bool>>>(), It.IsAny<CancellationToken>()))
+            .Returns((Expression<Func<TechZone, bool>>? expr, CancellationToken _) =>
+                expr == null ? _f.ToEmptyAsyncQueryable<TechZone>() : _f.ToEmptyAsyncQueryable<TechZone>().Where(expr));
+
         return new GetPostsQueryHandler(
-            _f.PostRepository.Object, _f.PostLikeRepository.Object, _f.PostBookmarkRepository.Object,
+            _f.PostRepository.Object, _f.TechZoneRepository.Object, _f.PostLikeRepository.Object, _f.PostBookmarkRepository.Object,
             _f.Mapper, _f.CurrentUser.Object);
     }
 
@@ -186,7 +191,7 @@ public class GetPostsQueryHandlerTests
         _f.LoginAs(viewerId, "viewer");
         // Dựng handler trực tiếp — likes/bookmarks đã setup riêng, KHÔNG gọi BuildHandler (sẽ đè empty)
         var handler = new GetPostsQueryHandler(
-            _f.PostRepository.Object, _f.PostLikeRepository.Object, _f.PostBookmarkRepository.Object,
+            _f.PostRepository.Object, _f.TechZoneRepository.Object, _f.PostLikeRepository.Object, _f.PostBookmarkRepository.Object,
             _f.Mapper, _f.CurrentUser.Object);
 
         // Act
@@ -223,5 +228,63 @@ public class GetPostsQueryHandlerTests
         Assert.Equal(25, result.Data!.TotalCount);
         Assert.Equal(5, result.Data.Items.Count());
         Assert.Equal(3, result.Data.TotalPages);
+    }
+
+    [Fact]
+    public async Task Handle_FilterByTechZone_ShouldReturnOnlyPostsInZone()
+    {
+        // Arrange (UC-13, UC-14)
+        var zoneId = Guid.NewGuid();
+        var postInZone = TestFixture.CreatePost(status: (int)ContentStatus.Published);
+        postInZone.TechZoneId = zoneId;
+        var postOther = TestFixture.CreatePost(status: (int)ContentStatus.Published);
+        postOther.TechZoneId = Guid.NewGuid();
+
+        var all = _f.ToAsyncQueryable(new List<Post> { postInZone, postOther });
+        _f.PostRepository
+            .Setup(r => r.GetByExpression(It.IsAny<Expression<Func<Post, bool>>>(), It.IsAny<CancellationToken>()))
+            .Returns((Expression<Func<Post, bool>>? expr, CancellationToken _) =>
+                expr == null ? all : all.Where(expr));
+
+        var zone = new TechZone { Id = zoneId, Name = ".NET", Slug = "dotnet", Status = 1 };
+        _f.TechZoneRepository
+            .Setup(r => r.GetBySlugAsync("dotnet", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(zone);
+
+        var handler = BuildHandler();
+
+        // Act
+        var result = await handler.Handle(new GetPostsQuery { Page = 1, PageSize = 10, TechZoneSlug = "dotnet" }, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Data!.Items);
+        Assert.Equal(postInZone.Id, result.Data.Items.First().Id);
+    }
+
+    [Fact]
+    public async Task Handle_FilterByTag_ShouldReturnMatchingPosts()
+    {
+        // Arrange (UC-13)
+        var postA = TestFixture.CreatePost(status: (int)ContentStatus.Published);
+        postA.Tags = "csharp,aspnet,dotnet";
+        var postB = TestFixture.CreatePost(status: (int)ContentStatus.Published);
+        postB.Tags = "python,fastapi";
+
+        var all = _f.ToAsyncQueryable(new List<Post> { postA, postB });
+        _f.PostRepository
+            .Setup(r => r.GetByExpression(It.IsAny<Expression<Func<Post, bool>>>(), It.IsAny<CancellationToken>()))
+            .Returns((Expression<Func<Post, bool>>? expr, CancellationToken _) =>
+                expr == null ? all : all.Where(expr));
+
+        var handler = BuildHandler();
+
+        // Act
+        var result = await handler.Handle(new GetPostsQuery { Page = 1, PageSize = 10, Tag = "csharp" }, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Data!.Items);
+        Assert.Equal(postA.Id, result.Data.Items.First().Id);
     }
 }

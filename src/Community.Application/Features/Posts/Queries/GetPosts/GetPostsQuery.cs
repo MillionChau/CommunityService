@@ -20,6 +20,12 @@ public record GetPostsQuery : IRequest<ResponseModel<PagedResponse<PostDto>>>
     public string? Search { get; init; }
     /// <summary>Lọc theo trạng thái (FR-13). Null = mặc định.</summary>
     public int? Status { get; init; }
+    /// <summary>Lọc theo TechZoneId (UC-13, UC-14). Null = tất cả.</summary>
+    public Guid? TechZoneId { get; init; }
+    /// <summary>Lọc theo Slug của TechZone (UC-13, UC-14). Null = tất cả.</summary>
+    public string? TechZoneSlug { get; init; }
+    /// <summary>Lọc theo Tag công nghệ (UC-13). Null = tất cả.</summary>
+    public string? Tag { get; init; }
 }
 
 public class GetPostsQueryValidator : AbstractValidator<GetPostsQuery>
@@ -32,12 +38,13 @@ public class GetPostsQueryValidator : AbstractValidator<GetPostsQuery>
 }
 
 /// <summary>
-/// Xem bảng tin cộng đồng có phân trang/tìm kiếm/lọc (FR-10 → FR-13 / UC-10 → UC-13).
-/// Người dùng thường chỉ thấy bài Published; Admin xem được cả Hidden/Draft qua filter.
+/// Xem bảng tin cộng đồng có phân trang/tìm kiếm/lọc (FR-10 → FR-13 / UC-10 → UC-14).
+/// Hỗ trợ lọc theo TechZone và Tag công nghệ (UC-13, UC-14).
 /// </summary>
 public class GetPostsQueryHandler : IRequestHandler<GetPostsQuery, ResponseModel<PagedResponse<PostDto>>>
 {
     private readonly IPostRepository _postRepository;
+    private readonly ITechZoneRepository _techZoneRepository;
     private readonly IPostLikeRepository _likeRepository;
     private readonly IPostBookmarkRepository _bookmarkRepository;
     private readonly IMapper _mapper;
@@ -45,12 +52,14 @@ public class GetPostsQueryHandler : IRequestHandler<GetPostsQuery, ResponseModel
 
     public GetPostsQueryHandler(
         IPostRepository postRepository,
+        ITechZoneRepository techZoneRepository,
         IPostLikeRepository likeRepository,
         IPostBookmarkRepository bookmarkRepository,
         IMapper mapper,
         ICurrentUserService currentUser)
     {
         _postRepository = postRepository;
+        _techZoneRepository = techZoneRepository;
         _likeRepository = likeRepository;
         _bookmarkRepository = bookmarkRepository;
         _mapper = mapper;
@@ -61,6 +70,31 @@ public class GetPostsQueryHandler : IRequestHandler<GetPostsQuery, ResponseModel
         CancellationToken cancellationToken)
     {
         var query = _postRepository.GetByExpression(cancellationToken: cancellationToken);
+
+        // Lọc theo TechZone (UC-13, UC-14)
+        if (request.TechZoneId.HasValue)
+        {
+            query = query.Where(p => p.TechZoneId == request.TechZoneId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(request.TechZoneSlug))
+        {
+            var zone = await _techZoneRepository.GetBySlugAsync(request.TechZoneSlug, cancellationToken);
+            if (zone != null)
+            {
+                query = query.Where(p => p.TechZoneId == zone.Id);
+            }
+            else
+            {
+                query = query.Where(p => false);
+            }
+        }
+
+        // Lọc theo Tag công nghệ (UC-13)
+        if (!string.IsNullOrWhiteSpace(request.Tag))
+        {
+            var tag = request.Tag.Trim().ToLower();
+            query = query.Where(p => p.Tags != null && p.Tags.ToLower().Contains(tag));
+        }
 
         // Mặc định: chỉ hiển thị bài đã xuất bản, trừ khi Admin lọc explicitly
         if (request.Status.HasValue)
@@ -75,11 +109,19 @@ public class GetPostsQueryHandler : IRequestHandler<GetPostsQuery, ResponseModel
             query = query.Where(p => p.Status == (int)ContentStatus.Published);
         }
 
-        // Tìm kiếm theo từ khóa trong nội dung (FR-12)
+        // Tìm kiếm từ khóa đa trường / mờ trên Content và Tags (UC-12, FR-12)
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
-            var keyword = request.Search.Trim();
-            query = query.Where(p => p.Content != null && p.Content.ToLower().Contains(keyword.ToLower()));
+            var rawSearch = request.Search.Trim().ToLower();
+            var searchTokens = rawSearch.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            foreach (var token in searchTokens)
+            {
+                var term = token;
+                query = query.Where(p =>
+                    (p.Content != null && p.Content.ToLower().Contains(term)) ||
+                    (p.Tags != null && p.Tags.ToLower().Contains(term)));
+            }
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -92,6 +134,24 @@ public class GetPostsQueryHandler : IRequestHandler<GetPostsQuery, ResponseModel
             .ToListAsync(cancellationToken);
 
         var dtos = _mapper.Map<IEnumerable<PostDto>>(posts).ToList();
+
+        // Điền thông tin TechZone cho bài viết
+        var zoneIds = posts.Where(p => p.TechZoneId.HasValue).Select(p => p.TechZoneId!.Value).Distinct().ToList();
+        if (zoneIds.Count > 0)
+        {
+            var zonesById = await _techZoneRepository
+                .GetByExpression(z => zoneIds.Contains(z.Id), cancellationToken)
+                .ToDictionaryAsync(z => z.Id, cancellationToken);
+
+            foreach (var dto in dtos)
+            {
+                if (dto.TechZoneId.HasValue && zonesById.TryGetValue(dto.TechZoneId.Value, out var z))
+                {
+                    dto.TechZoneName = z.Name;
+                    dto.TechZoneSlug = z.Slug;
+                }
+            }
+        }
 
         // Trạng thái tương tác của NGƯỜI XEM HIỆN TẠI (IsLiked/IsBookmarked) theo JWT
         if (_currentUser.UserId is Guid viewerId)

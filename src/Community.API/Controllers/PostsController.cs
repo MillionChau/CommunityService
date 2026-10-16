@@ -79,13 +79,14 @@ public class PostsController : ApiControllerBase
         return Ok(result);
     }
 
-    /// <summary>Lưu / bỏ lưu bài viết (FR-20) — cần đăng nhập; danh sách xem tại GET bookmarks/me.</summary>
+    /// <summary>Lưu / bỏ lưu bài viết (FR-20 / UC-20, UC-21) — cần đăng nhập; hỗ trợ folderId phân loại vào thư mục.</summary>
     [HttpPost("{id:guid}/bookmark")]
     [Authorize]
     public async Task<ActionResult<ResponseModel<ToggleBookmarkResult>>> ToggleBookmark(Guid id,
-        CancellationToken cancellationToken)
+        [FromQuery] Guid? folderId = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await Mediator.Send(new TogglePostBookmarkCommand(id), cancellationToken);
+        var result = await Mediator.Send(new TogglePostBookmarkCommand(id, folderId), cancellationToken);
         return Ok(result);
     }
 

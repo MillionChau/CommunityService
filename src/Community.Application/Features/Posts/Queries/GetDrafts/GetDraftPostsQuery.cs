@@ -53,9 +53,9 @@ public class GetDraftPostsQueryHandler : IRequestHandler<GetDraftPostsQuery, Res
 
         // Chỉ lấy bài viết của chính người dùng hiện tại, có trạng thái là Draft và chưa bị xóa mềm
         var query = _postRepository.GetByExpression(
-            p => p.AuthorId == userId && 
-                 p.Status == (int)ContentStatus.Draft && 
-                 (p.IsDeleted == null || p.IsDeleted == 0), 
+            p => p.AuthorId == userId &&
+                 p.Status == (int)ContentStatus.Draft &&
+                 (p.IsDeleted == null || p.IsDeleted == 0),
             cancellationToken);
 
         var totalCount = await query.CountAsync(cancellationToken);

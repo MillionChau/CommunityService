@@ -15,8 +15,17 @@ public class PostConfiguration : IEntityTypeConfiguration<Post>
         builder.Property(p => p.Content)
             .HasColumnType("text");
 
+        builder.Property(p => p.Tags)
+            .HasMaxLength(500);
+
         // Chỉ mục phục vụ feed: lọc theo Status + sort theo thời gian (FR-10)
         builder.HasIndex(p => new { p.Status, p.CreatedDate });
+        builder.HasIndex(p => p.TechZoneId);
+
+        builder.HasOne(p => p.TechZone)
+            .WithMany(t => t.Posts)
+            .HasForeignKey(p => p.TechZoneId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Quan hệ 1-nhiều: Post → Comments. Khi Post bị xóa vật lý, comment bị xóa theo.
         builder.HasMany(p => p.Comments)
