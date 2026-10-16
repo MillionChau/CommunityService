@@ -11,6 +11,11 @@ public class PostDto
     public int? BookmarksCount { get; set; }
     public int? ViewsCount { get; set; }
     public int? Status { get; set; }
+    public Guid? TechZoneId { get; set; }
+    public string? TechZoneName { get; set; }
+    public string? TechZoneSlug { get; set; }
+    public string? Tags { get; set; }
+    public Guid? BookmarkFolderId { get; set; }
 
     // Trạng thái tương tác của NGƯỜI XEM HIỆN TẠI (điền trong handler theo JWT, không map từ entity)
     public bool IsLikedByViewer { get; set; }

@@ -12,6 +12,9 @@ namespace Community.Domain.Entities
     {
         public string? Content { get; set; }
         public Guid? AuthorId { get; set; }
+        public Guid? TechZoneId { get; set; }
+        public virtual TechZone? TechZone { get; set; }
+        public string? Tags { get; set; }
         public ICollection<Comment>? Comments { get; set; }
         public ICollection<PostReport>? Reports { get; set; }
         public int? LikesCount { get; set; }
