@@ -22,6 +22,50 @@ namespace Community.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Community.Domain.Entities.BookmarkFolder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ColorCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("ItemsCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ModifiedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedDate");
+
+                    b.ToTable("BookmarkFolders", (string)null);
+                });
+
             modelBuilder.Entity("Community.Domain.Entities.Comment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -132,6 +176,55 @@ namespace Community.Infrastructure.Migrations
                     b.ToTable("CommentLikes", (string)null);
                 });
 
+            modelBuilder.Entity("Community.Domain.Entities.CommentReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CommentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ModifiedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("ReporterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CommentId");
+
+                    b.HasIndex("CommentId", "ReporterId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_CommentReports_OnePendingPerUserComment")
+                        .HasFilter("\"Status\" = 0");
+
+                    b.HasIndex("Status", "CreatedDate");
+
+                    b.ToTable("CommentReports", (string)null);
+                });
+
             modelBuilder.Entity("Community.Domain.Entities.Post", b =>
                 {
                     b.Property<Guid>("Id")
@@ -192,6 +285,13 @@ namespace Community.Infrastructure.Migrations
                     b.Property<int?>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Tags")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("TechZoneId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("Type")
                         .HasColumnType("integer");
 
@@ -199,6 +299,8 @@ namespace Community.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TechZoneId");
 
                     b.HasIndex("Status", "CreatedDate");
 
@@ -217,6 +319,9 @@ namespace Community.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("FolderId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("ModifiedBy")
                         .HasColumnType("uuid");
 
@@ -231,11 +336,15 @@ namespace Community.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("FolderId");
+
                     b.HasIndex("PostId", "UserId")
                         .IsUnique()
                         .HasDatabaseName("UX_PostBookmarks_PostUser");
 
                     b.HasIndex("UserId", "CreatedDate");
+
+                    b.HasIndex("UserId", "FolderId");
 
                     b.ToTable("PostBookmarks", (string)null);
                 });
@@ -324,6 +433,110 @@ namespace Community.Infrastructure.Migrations
                     b.ToTable("PostReports", (string)null);
                 });
 
+            modelBuilder.Entity("Community.Domain.Entities.TechZone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ColorCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FollowersCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IconUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid?>("ModifiedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("PostsCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Tags")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TechZones_Slug");
+
+                    b.HasIndex("Status", "DisplayOrder");
+
+                    b.ToTable("TechZones", (string)null);
+                });
+
+            modelBuilder.Entity("Community.Domain.Entities.UserFollow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FolloweeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FollowerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ModifiedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FolloweeId");
+
+                    b.HasIndex("FollowerId");
+
+                    b.HasIndex("FollowerId", "FolloweeId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_UserFollows_Follower_Followee");
+
+                    b.ToTable("UserFollows", (string)null);
+                });
+
             modelBuilder.Entity("Community.Domain.Entities.Comment", b =>
                 {
                     b.HasOne("Community.Domain.Entities.Post", null)
@@ -341,13 +554,39 @@ namespace Community.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Community.Domain.Entities.CommentReport", b =>
+                {
+                    b.HasOne("Community.Domain.Entities.Comment", null)
+                        .WithMany()
+                        .HasForeignKey("CommentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Community.Domain.Entities.Post", b =>
+                {
+                    b.HasOne("Community.Domain.Entities.TechZone", "TechZone")
+                        .WithMany("Posts")
+                        .HasForeignKey("TechZoneId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("TechZone");
+                });
+
             modelBuilder.Entity("Community.Domain.Entities.PostBookmark", b =>
                 {
+                    b.HasOne("Community.Domain.Entities.BookmarkFolder", "Folder")
+                        .WithMany("Bookmarks")
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Community.Domain.Entities.Post", null)
                         .WithMany()
                         .HasForeignKey("PostId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Folder");
                 });
 
             modelBuilder.Entity("Community.Domain.Entities.PostLike", b =>
@@ -368,11 +607,21 @@ namespace Community.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Community.Domain.Entities.BookmarkFolder", b =>
+                {
+                    b.Navigation("Bookmarks");
+                });
+
             modelBuilder.Entity("Community.Domain.Entities.Post", b =>
                 {
                     b.Navigation("Comments");
 
                     b.Navigation("Reports");
+                });
+
+            modelBuilder.Entity("Community.Domain.Entities.TechZone", b =>
+                {
+                    b.Navigation("Posts");
                 });
 #pragma warning restore 612, 618
         }
