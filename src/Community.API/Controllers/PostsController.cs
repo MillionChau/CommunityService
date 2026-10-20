@@ -46,6 +46,10 @@ public class PostsController : ApiControllerBase
         CancellationToken cancellationToken)
     {
         var result = await Mediator.Send(command, cancellationToken);
+        if (!result.IsSuccess)
+        {
+            return BadRequest(result);
+        }
         return CreatedAtAction(nameof(Get), new { id = result.Data }, result);
     }
 

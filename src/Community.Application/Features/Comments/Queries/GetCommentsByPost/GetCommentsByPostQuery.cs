@@ -76,6 +76,22 @@ public class GetCommentsByPostQueryHandler
                 dto.IsLikedByViewer = likedIds.Contains(dto.Id);
         }
 
-        return ResponseModel<IEnumerable<CommentDto>>.Success(dtos);
+        // Xây dựng cây phân cấp comment (UC-25): Comment gốc chứa danh sách replies lồng nhau
+        var dtoLookup = dtos.ToDictionary(d => d.Id);
+        var rootComments = new List<CommentDto>();
+
+        foreach (var dto in dtos)
+        {
+            if (dto.ParentCommentId.HasValue && dtoLookup.TryGetValue(dto.ParentCommentId.Value, out var parentDto))
+            {
+                parentDto.Replies.Add(dto);
+            }
+            else
+            {
+                rootComments.Add(dto);
+            }
+        }
+
+        return ResponseModel<IEnumerable<CommentDto>>.Success(rootComments);
     }
 }

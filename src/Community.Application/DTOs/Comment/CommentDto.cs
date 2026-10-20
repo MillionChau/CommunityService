@@ -11,6 +11,9 @@ public record CommentDto
     public int? LikesCount { get; set; }
     public int? RepliesCount { get; set; }
 
+    // Danh sách phản hồi con phân cấp cây (UC-25)
+    public List<CommentDto> Replies { get; set; } = new();
+
     // Người xem hiện tại đã thích bình luận này chưa (điền trong handler theo JWT)
     public bool IsLikedByViewer { get; set; }
     public int? Type { get; set; }

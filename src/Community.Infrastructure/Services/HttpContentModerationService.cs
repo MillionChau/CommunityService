@@ -26,13 +26,17 @@ public class HttpContentModerationService : IContentModerationService
         _httpClient = httpClient;
         _logger = logger;
 
-        var baseUrl = configuration["QualityService:BaseUrl"] ?? "http://localhost:8002/";
+        var baseUrl = configuration["QualityService:BaseUrl"] ?? "http://localhost:8001/";
         if (!baseUrl.EndsWith("/")) baseUrl += "/";
         _httpClient.BaseAddress = new Uri(baseUrl);
-        _httpClient.Timeout = TimeSpan.FromSeconds(4);
+        var timeoutSeconds = configuration.GetValue<int>("QualityService:TimeoutSeconds", 15);
+        _httpClient.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
     }
 
-    public async Task<ModerationResult> CheckAsync(string content, CancellationToken cancellationToken = default)
+    public Task<ModerationResult> CheckAsync(string content, CancellationToken cancellationToken = default)
+        => CheckAsync(content, "post", cancellationToken);
+
+    public async Task<ModerationResult> CheckAsync(string content, string contentType, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(content))
         {
@@ -46,7 +50,7 @@ public class HttpContentModerationService : IContentModerationService
 
         try
         {
-            var payload = JsonSerializer.Serialize(new { content = content.Trim() }, JsonOptions);
+            var payload = JsonSerializer.Serialize(new { content = content.Trim(), content_type = contentType }, JsonOptions);
             using var requestContent = new StringContent(payload, Encoding.UTF8, "application/json");
 
             using var response = await _httpClient.PostAsync("api/v1/quality/analyze", requestContent, cancellationToken);
@@ -69,6 +73,9 @@ public class HttpContentModerationService : IContentModerationService
                 {
                     qualityScore = scoreProp.GetInt32();
                 }
+
+                _logger.LogInformation("QualityService moderation completed. ContentType: {ContentType}, IsValid: {IsValid}, Toxicity: {Toxicity}, QualityScore: {QualityScore}",
+                    contentType, isValid, toxicity, qualityScore);
 
                 return new ModerationResult
                 {

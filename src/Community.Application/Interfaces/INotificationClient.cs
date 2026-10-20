@@ -31,6 +31,7 @@ public static class NotificationTypes
     public const int PostShared = 4;
     public const int ReportReviewed = 5;
     public const int PostHidden = 6;
+    public const int AuthorFollowed = 7;
     public const int System = 99;
     public const int PendingReport = 100;
 

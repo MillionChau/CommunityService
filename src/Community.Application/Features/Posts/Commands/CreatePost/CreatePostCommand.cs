@@ -112,6 +112,15 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
         // Kiểm duyệt nội dung tự động (UC-15: Quality Service kiểm duyệt trước khi hiển thị)
         var moderation = await _moderation.CheckAsync(content, cancellationToken);
 
+        if (!moderation.IsValid)
+        {
+            var reason = moderation.Toxicity == "toxic" || moderation.Toxicity == "suspicious"
+                ? $"Nội dung bài viết bị từ chối do vi phạm tiêu chuẩn kiểm duyệt cộng đồng (Toxicity: {moderation.Toxicity}). Vui lòng điều chỉnh lại câu từ."
+                : $"Nội dung bài viết không thuộc lĩnh vực công nghệ thông tin (non-it, Điểm chất lượng: {moderation.QualityScore}/100).";
+
+            return ResponseModel<Guid>.Error(reason);
+        }
+
         var post = new Post
         {
             Id = Guid.NewGuid(),
@@ -119,7 +128,8 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
             AuthorId = authorId,
             TechZoneId = request.TechZoneId,
             Tags = request.Tags?.Trim(),
-            Status = moderation.IsValid ? (int)ContentStatus.Published : (int)ContentStatus.Hidden,
+            Status = (int)ContentStatus.Published,
+            IsApproved = 1,
             LikesCount = 0,
             CommentsCount = 0,
             SharesCount = 0,
@@ -153,7 +163,6 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
             createdDate = post.CreatedDate
         }, cancellationToken);
 
-        return ResponseModel<Guid>.Success(post.Id,
-            moderation.IsValid ? "Post created successfully." : "Post created but flagged for review.");
+        return ResponseModel<Guid>.Success(post.Id, "Post created successfully.");
     }
 }

@@ -3,6 +3,7 @@ using Community.Application.DTOs;
 using Community.Application.Interfaces;
 using Community.Domain.Contracts;
 using Community.Domain.Entities;
+using Community.Domain.Enums;
 using Community.Domain.Interfaces;
 using AutoMapper;
 using FluentValidation;
@@ -35,6 +36,7 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
     private readonly IRealTimeNotifier _notifier;
     private readonly INotificationClient _notificationClient;
     private readonly IMapper _mapper;
+    private readonly IContentModerationService? _moderation;
 
     public CreateCommentCommandHandler(
         ICommentRepository commentRepository,
@@ -43,7 +45,8 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
         ICurrentUserService currentUser,
         IRealTimeNotifier notifier,
         INotificationClient notificationClient,
-        IMapper mapper)
+        IMapper mapper,
+        IContentModerationService? moderation = null)
     {
         _commentRepository = commentRepository;
         _postRepository = postRepository;
@@ -52,6 +55,7 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
         _notifier = notifier;
         _notificationClient = notificationClient;
         _mapper = mapper;
+        _moderation = moderation;
     }
 
     public async Task<ResponseModel<CommentDto>> Handle(CreateCommentCommand request, CancellationToken cancellationToken)
@@ -64,15 +68,42 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
         if (post == null)
             throw new Common.Exceptions.NotFoundException("Post", request.PostId);
 
+        // Kiểm duyệt bình luận bằng AI (QualityService)
+        if (_moderation != null)
+        {
+            var moderation = await _moderation.CheckAsync(request.Content, "comment", cancellationToken);
+            if (!moderation.IsValid)
+            {
+                var reason = moderation.Toxicity == "toxic" || moderation.Toxicity == "suspicious"
+                    ? $"Bình luận bị từ chối do vi phạm tiêu chuẩn kiểm duyệt cộng đồng (Toxicity: {moderation.Toxicity}). Vui lòng điều chỉnh lại câu từ."
+                    : $"Bình luận không đạt tiêu chuẩn chất lượng thảo luận IT (Điểm chất lượng: {moderation.QualityScore}/100).";
+                return ResponseModel<CommentDto>.Error(reason);
+            }
+        }
+
         var comment = new Comment
         {
             Id = Guid.NewGuid(),
             PostId = request.PostId,
             AuthorId = _currentUser.UserId,
-            Content = request.Content
+            Content = request.Content,
+            ParentCommentId = request.ParentCommentId,
+            Status = (int)ContentStatus.Published,
+            IsApproved = 1
         };
 
-        // Tăng đếm số comment của bài viết (int? — phải coalesce null, += trên null vẫn là null)
+        // Nếu là reply (UC-25): tăng đếm số replies của comment cha
+        if (request.ParentCommentId is { } parentCommentId)
+        {
+            var parentComment = await _commentRepository.GetByIdAsync(parentCommentId, cancellationToken);
+            if (parentComment != null)
+            {
+                parentComment.RepliesCount = (parentComment.RepliesCount ?? 0) + 1;
+                await _commentRepository.UpdateAsync(parentComment, cancellationToken);
+            }
+        }
+
+        // Tăng đếm số comment của bài viết
         post.CommentsCount = (post.CommentsCount ?? 0) + 1;
         await _postRepository.UpdateAsync(post, cancellationToken);
 
@@ -130,6 +161,6 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
         if (notifications.Count > 0)
             await _notificationClient.SendManyAsync(notifications, cancellationToken);
 
-        return ResponseModel<CommentDto>.Success(dto);
+        return ResponseModel<CommentDto>.Success(dto, "Comment created successfully.");
     }
 }

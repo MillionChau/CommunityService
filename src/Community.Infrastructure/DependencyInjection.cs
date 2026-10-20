@@ -52,7 +52,9 @@ public static class DependencyInjection
             .FromAssemblies(typeof(CommunityDbContext).Assembly)
             .AddClasses(classes => classes.Where(type =>
                 type.Name.EndsWith("Repository", StringComparison.Ordinal) ||
-                type.Name.EndsWith("Service", StringComparison.Ordinal)))
+                (type.Name.EndsWith("Service", StringComparison.Ordinal)
+                 && type.Name != "StubContentModerationService"
+                 && type.Name != "HttpContentModerationService")))
             .AsImplementedInterfaces()
             .WithScopedLifetime());
 
@@ -106,15 +108,20 @@ public static class DependencyInjection
     {
         using var scope = serviceProvider.CreateScope();
         var services = scope.ServiceProvider;
+        var logger = services.GetService<Microsoft.Extensions.Logging.ILogger<CommunityDbContext>>();
         try
         {
             var db = services.GetRequiredService<CommunityDbContext>();
             db.Database.Migrate();
+
+            if (logger != null)
+            {
+                CommunityDataSeeder.SeedAsync(db, logger).GetAwaiter().GetResult();
+            }
         }
         catch (Exception ex)
         {
-            var logger = services.GetService<Microsoft.Extensions.Logging.ILogger<CommunityDbContext>>();
-            logger?.LogWarning(ex, "Could not apply automatic database migrations at startup.");
+            logger?.LogWarning(ex, "Could not apply automatic database migrations or seed data at startup.");
         }
     }
 }

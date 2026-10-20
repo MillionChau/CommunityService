@@ -31,4 +31,5 @@ public interface IContentModerationService
     /// kết quả trung lập (IsValid = true) kèm cờ pendingReview để hàng chờ Admin xử lý.
     /// </summary>
     Task<ModerationResult> CheckAsync(string content, CancellationToken cancellationToken = default);
+    Task<ModerationResult> CheckAsync(string content, string contentType, CancellationToken cancellationToken = default);
 }
