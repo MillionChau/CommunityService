@@ -14,6 +14,10 @@ public class CommunityDbContext : DbContext, IApplicationDbContext
     public DbSet<PostLike> PostLikes => Set<PostLike>();
     public DbSet<CommentLike> CommentLikes => Set<CommentLike>();
     public DbSet<PostBookmark> PostBookmarks => Set<PostBookmark>();
+    public DbSet<TechZone> TechZones => Set<TechZone>();
+    public DbSet<BookmarkFolder> BookmarkFolders => Set<BookmarkFolder>();
+    public DbSet<CommentReport> CommentReports => Set<CommentReport>();
+    public DbSet<UserFollow> UserFollows => Set<UserFollow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
