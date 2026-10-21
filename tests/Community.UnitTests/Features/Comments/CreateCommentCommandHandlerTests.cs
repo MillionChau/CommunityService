@@ -21,10 +21,11 @@ public class CreateCommentCommandHandlerTests
 {
     private readonly TestFixture _f = new();
 
-    private CreateCommentCommandHandler BuildHandler()
+    private CreateCommentCommandHandler BuildHandler(IContentModerationService? moderation = null)
         => new(
             _f.CommentRepository.Object, _f.PostRepository.Object, _f.UnitOfWork.Object,
-            _f.CurrentUser.Object, _f.Notifier.Object, _f.NotificationClient.Object, _f.Mapper);
+            _f.CurrentUser.Object, _f.Notifier.Object, _f.NotificationClient.Object, _f.Mapper,
+            moderation ?? _f.Moderation.Object);
 
     [Fact]
     public async Task Handle_ValidComment_ShouldCreate_AndIncrementPostCommentsCount()
@@ -151,5 +152,36 @@ public class CreateCommentCommandHandlerTests
                 list.Any(n => n.RecipientId == bobId && n.Type == NotificationTypes.CommentReplied) &&
                 list.Any(n => n.RecipientId == aliceId && n.Type == NotificationTypes.PostCommented)),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_ToxicComment_ShouldBeFlaggedHidden_AndNotIncrementCount()
+    {
+        // Arrange
+        var authorId = Guid.NewGuid();
+        var post = TestFixture.CreatePost(authorId: Guid.NewGuid());
+        post.CommentsCount = 5;
+        _f.LoginAs(authorId, "bad_user");
+        _f.PostRepository.Setup(r => r.GetByIdAsync(post.Id, It.IsAny<CancellationToken>())).ReturnsAsync(post);
+
+        var toxicModeration = new Mock<IContentModerationService>();
+        toxicModeration.Setup(m => m.CheckAsync(It.IsAny<string>(), "comment", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ModerationResult { IsValid = false, Toxicity = "toxic", QualityScore = 10 });
+
+        var handler = BuildHandler(toxicModeration.Object);
+
+        // Act
+        var result = await handler.Handle(
+            new CreateCommentCommand { PostId = post.Id, Content = "Bình luận chứa từ ngữ chửi bới xúc phạm!" },
+            CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Contains("flagged for review", result.Message);
+        Assert.Equal(5, post.CommentsCount); // không tăng count
+        _f.CommentRepository.Verify(r => r.AddAsync(It.Is<Comment>(c =>
+            c.Status == (int)ContentStatus.Hidden && c.IsApproved == 0),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _f.Notifier.Verify(n => n.NotifyPostAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

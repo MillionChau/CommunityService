@@ -12,6 +12,7 @@ namespace Community.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Route("api/comments")]
 public class CommentController : ApiControllerBase
 {
     /// <summary>Xem bình luận của một bài viết (FR-24 ngữ cảnh đọc) — công khai.</summary>
@@ -31,6 +32,10 @@ public class CommentController : ApiControllerBase
         CancellationToken cancellationToken)
     {
         var result = await Mediator.Send(command, cancellationToken);
+        if (!result.IsSuccess)
+        {
+            return BadRequest(result);
+        }
         return Ok(result);
     }
 
@@ -62,4 +67,21 @@ public class CommentController : ApiControllerBase
         var result = await Mediator.Send(new DeleteCommentCommand { Id = id }, cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>Báo cáo vi phạm bình luận (FR-29 / UC-29) — cần đăng nhập.</summary>
+    [HttpPost("{id:guid}/report")]
+    [Authorize]
+    public async Task<ActionResult<ResponseModel<CommentReportDto>>> Report(Guid id, [FromBody] ReportCommentRequest body,
+        CancellationToken cancellationToken)
+    {
+        var command = new Community.Application.Features.Comments.Commands.CreateCommentReport.CreateCommentReportCommand
+        {
+            CommentId = id,
+            Reason = body.Reason
+        };
+        var result = await Mediator.Send(command, cancellationToken);
+        return Ok(result);
+    }
+
+    public record ReportCommentRequest(string Reason);
 }

@@ -24,6 +24,10 @@ public class TestFixture
     public Mock<IPostLikeRepository> PostLikeRepository { get; } = new();
     public Mock<ICommentLikeRepository> CommentLikeRepository { get; } = new();
     public Mock<IPostBookmarkRepository> PostBookmarkRepository { get; } = new();
+    public Mock<ITechZoneRepository> TechZoneRepository { get; } = new();
+    public Mock<IBookmarkFolderRepository> BookmarkFolderRepository { get; } = new();
+    public Mock<ICommentReportRepository> CommentReportRepository { get; } = new();
+    public Mock<IUserFollowRepository> UserFollowRepository { get; } = new();
     public Mock<IUnitOfWork> UnitOfWork { get; } = new();
     public Mock<ICurrentUserService> CurrentUser { get; } = new();
     public Mock<IContentModerationService> Moderation { get; } = new();
@@ -38,6 +42,8 @@ public class TestFixture
 
         // Mặc định: moderation luôn pass (stub behavior)
         Moderation.Setup(m => m.CheckAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ModerationResult { IsValid = true, Toxicity = "safe", QualityScore = 90 });
+        Moderation.Setup(m => m.CheckAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ModerationResult { IsValid = true, Toxicity = "safe", QualityScore = 90 });
     }
 

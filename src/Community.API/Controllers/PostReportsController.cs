@@ -52,5 +52,32 @@ public class PostReportsController : ApiControllerBase
         return Ok(result);
     }
 
+    /// <summary>Xem hàng chờ báo cáo bình luận Pending (UC-29 / UC-62) — Quản trị viên hoặc tài khoản kiểm thử.</summary>
+    [HttpGet("comments/pending")]
+    [Authorize]
+    public async Task<ActionResult<ResponseModel<PagedResponse<CommentReportDto>>>> GetPendingCommentReports(
+        [FromQuery] Community.Application.Features.Comments.Queries.GetPendingCommentReports.GetPendingCommentReportsQuery query,
+        CancellationToken cancellationToken)
+    {
+        var result = await Mediator.Send(query, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>Duyệt (Approve=true → ẩn bình luận) hoặc từ chối báo cáo bình luận (UC-29 / UC-63) — Quản trị viên hoặc tài khoản kiểm thử.</summary>
+    [HttpPut("comments/{id:guid}/review")]
+    [Authorize]
+    public async Task<ActionResult<ResponseModel<bool>>> ReviewCommentReport(Guid id, [FromBody] ReviewRequest body,
+        CancellationToken cancellationToken)
+    {
+        var command = new Community.Application.Features.Comments.Commands.ReviewCommentReport.ReviewCommentReportCommand
+        {
+            ReportId = id,
+            Approve = body.Approve,
+            ReviewNote = body.ReviewNote
+        };
+        var result = await Mediator.Send(command, cancellationToken);
+        return Ok(result);
+    }
+
     public record ReviewRequest(bool Approve, string? ReviewNote);
 }

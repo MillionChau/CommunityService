@@ -204,4 +204,37 @@ public class DeleteAndGetCommentsHandlerTests
             BuildCommentsQueryHandler(new List<Comment>()).Handle(
                 new GetCommentsByPostQuery(post.Id), CancellationToken.None));
     }
+
+    [Fact]
+    public async Task GetComments_ShouldAssembleThreadedTree_WithRepliesUnderRoot()
+    {
+        // Arrange — 1 comment gốc và 2 replies con (UC-25)
+        var post = TestFixture.CreatePost();
+        var rootId = Guid.NewGuid();
+        var reply1Id = Guid.NewGuid();
+        var reply2Id = Guid.NewGuid();
+
+        var comments = new List<Comment>
+        {
+            new() { Id = rootId, PostId = post.Id, Content = "Root comment", Status = (int)ContentStatus.Published, CreatedDate = DateTime.UtcNow.AddMinutes(-10) },
+            new() { Id = reply1Id, PostId = post.Id, Content = "Reply 1", ParentCommentId = rootId, Status = (int)ContentStatus.Published, CreatedDate = DateTime.UtcNow.AddMinutes(-5) },
+            new() { Id = reply2Id, PostId = post.Id, Content = "Reply 2", ParentCommentId = rootId, Status = (int)ContentStatus.Published, CreatedDate = DateTime.UtcNow.AddMinutes(-2) }
+        };
+
+        _f.LoginAs(Guid.NewGuid(), "user");
+        var handler = BuildCommentsQueryHandler(comments);
+        _f.PostRepository.Setup(r => r.GetByIdAsync(post.Id, It.IsAny<CancellationToken>())).ReturnsAsync(post);
+
+        // Act
+        var result = await handler.Handle(new GetCommentsByPostQuery(post.Id), CancellationToken.None);
+
+        // Assert — Root comments chỉ có 1, trong đó Replies có 2 phần tử
+        Assert.True(result.IsSuccess);
+        var roots = result.Data!.ToList();
+        Assert.Single(roots);
+        Assert.Equal(rootId, roots[0].Id);
+        Assert.Equal(2, roots[0].Replies.Count);
+        Assert.Contains(roots[0].Replies, r => r.Id == reply1Id);
+        Assert.Contains(roots[0].Replies, r => r.Id == reply2Id);
+    }
 }
