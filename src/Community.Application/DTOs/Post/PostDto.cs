@@ -11,6 +11,7 @@ public class PostDto
     public int? BookmarksCount { get; set; }
     public int? ViewsCount { get; set; }
     public int? Status { get; set; }
+    public int? IsApproved { get; set; }
     public Guid? TechZoneId { get; set; }
     public string? TechZoneName { get; set; }
     public string? TechZoneSlug { get; set; }

@@ -482,3 +482,7 @@ $RECYCLE.BIN/
 *.swp
 bug.md
 TestAPI.md
+# Documentation
+*.md
+!README.md
+

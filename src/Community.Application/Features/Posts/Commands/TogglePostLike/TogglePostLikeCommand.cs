@@ -36,6 +36,7 @@ public class TogglePostLikeCommandHandler : IRequestHandler<TogglePostLikeComman
     private readonly ICurrentUserService _currentUser;
     private readonly IRealTimeNotifier _notifier;
     private readonly INotificationClient _notificationClient;
+    private readonly IReputationService? _reputationService;
 
     public TogglePostLikeCommandHandler(
         IPostRepository postRepository,
@@ -43,7 +44,8 @@ public class TogglePostLikeCommandHandler : IRequestHandler<TogglePostLikeComman
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
         IRealTimeNotifier notifier,
-        INotificationClient notificationClient)
+        INotificationClient notificationClient,
+        IReputationService? reputationService = null)
     {
         _postRepository = postRepository;
         _likeRepository = likeRepository;
@@ -51,6 +53,7 @@ public class TogglePostLikeCommandHandler : IRequestHandler<TogglePostLikeComman
         _currentUser = currentUser;
         _notifier = notifier;
         _notificationClient = notificationClient;
+        _reputationService = reputationService;
     }
 
     public async Task<ResponseModel<ToggleLikeResult>> Handle(TogglePostLikeCommand request,
@@ -82,6 +85,33 @@ public class TogglePostLikeCommandHandler : IRequestHandler<TogglePostLikeComman
 
         await _postRepository.UpdateAsync(post, cancellationToken);
         await _unitOfWork.SaveAsync(cancellationToken);
+
+        // SPEC-REP: Cộng/Trừ điểm uy tín khi bài viết được Like/Unlike (+5 PRP, +5 PCS)
+        if (post.AuthorId is { } authorId && authorId != userId && _reputationService != null)
+        {
+            if (isLiked)
+            {
+                await _reputationService.AddPointsAsync(
+                    authorId,
+                    "POST_LIKED",
+                    pointsDelta: 5,
+                    tssDelta: 0,
+                    sourceId: post.Id,
+                    reason: "Bài viết nhận được lượt thích từ cộng đồng",
+                    cancellationToken);
+            }
+            else
+            {
+                await _reputationService.DeductPointsAsync(
+                    authorId,
+                    "POST_UNLIKED",
+                    pointsPenalty: 5,
+                    tssPenalty: 0,
+                    sourceId: post.Id,
+                    reason: "Bài viết bị hủy lượt thích",
+                    cancellationToken);
+            }
+        }
 
         var result = new ToggleLikeResult(post.Id, isLiked, post.LikesCount ?? 0);
 

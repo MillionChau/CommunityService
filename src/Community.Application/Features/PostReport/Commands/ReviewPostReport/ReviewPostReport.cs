@@ -42,20 +42,22 @@ public class ReviewPostReportCommandHandler : IRequestHandler<ReviewPostReportCo
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly INotificationClient _notificationClient;
+    private readonly IReputationService? _reputationService;
 
     public ReviewPostReportCommandHandler(
         IPostReportRepository postReportRepository,
         IPostRepository postRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
-        INotificationClient notificationClient)
+        INotificationClient notificationClient,
+        IReputationService? reputationService = null)
     {
         _postReportRepository = postReportRepository;
-        _postRepository = postRepository;
         _postRepository = postRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _notificationClient = notificationClient;
+        _reputationService = reputationService;
     }
 
     public async Task<ResponseModel<bool>> Handle(ReviewPostReportCommand request, CancellationToken cancellationToken)
@@ -82,6 +84,19 @@ public class ReviewPostReportCommandHandler : IRequestHandler<ReviewPostReportCo
             {
                 post.Status = (int)ContentStatus.Hidden;
                 await _postRepository.UpdateAsync(post, cancellationToken);
+
+                // SPEC-REP: Phạt trừ điểm khi bài viết bị báo cáo và Admin xác nhận vi phạm (-30 PRP, -15 TSS)
+                if (post.AuthorId.HasValue && _reputationService != null)
+                {
+                    await _reputationService.DeductPointsAsync(
+                        post.AuthorId.Value,
+                        "REPORT_APPROVED_POST",
+                        pointsPenalty: 30,
+                        tssPenalty: 15,
+                        sourceId: post.Id,
+                        reason: $"Admin duyệt báo cáo vi phạm tiêu chuẩn cộng đồng: {report.Reason}",
+                        cancellationToken);
+                }
             }
         }
 

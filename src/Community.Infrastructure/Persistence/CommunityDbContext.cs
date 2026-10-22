@@ -19,6 +19,13 @@ public class CommunityDbContext : DbContext, IApplicationDbContext
     public DbSet<CommentReport> CommentReports => Set<CommentReport>();
     public DbSet<UserFollow> UserFollows => Set<UserFollow>();
 
+    // Reputation & Tier System (SPEC-REP-01)
+    public DbSet<UserReputation> UserReputations => Set<UserReputation>();
+    public DbSet<ReputationTransaction> ReputationTransactions => Set<ReputationTransaction>();
+    public DbSet<UserSanction> UserSanctions => Set<UserSanction>();
+    public DbSet<LeaderboardSnapshot> LeaderboardSnapshots => Set<LeaderboardSnapshot>();
+    public DbSet<LeaderboardEntry> LeaderboardEntries => Set<LeaderboardEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
