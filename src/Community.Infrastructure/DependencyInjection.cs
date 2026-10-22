@@ -43,8 +43,8 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionMultiplexer>(sp =>
         {
             var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
-            var redisConn = configuration.GetConnectionString("Redis") 
-                            ?? configuration["ConnectionStrings:Redis"] 
+            var redisConn = configuration.GetConnectionString("Redis")
+                            ?? configuration["ConnectionStrings:Redis"]
                             ?? "localhost:6379";
             try
             {

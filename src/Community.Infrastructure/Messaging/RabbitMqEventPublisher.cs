@@ -59,7 +59,7 @@ public class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
                 cancellationToken: cancellationToken);
 
             _initialized = true;
-            _logger.LogInformation("Connected to RabbitMQ exchange '{Exchange}' at {Host}:{Port}", 
+            _logger.LogInformation("Connected to RabbitMQ exchange '{Exchange}' at {Host}:{Port}",
                 _exchangeName, factory.HostName, factory.Port);
         }
         catch (Exception ex)
@@ -110,7 +110,7 @@ public class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
                 body: body,
                 cancellationToken: cancellationToken);
 
-            _logger.LogInformation("Published event {EventType} to exchange '{Exchange}' with key '{RoutingKey}'", 
+            _logger.LogInformation("Published event {EventType} to exchange '{Exchange}' with key '{RoutingKey}'",
                 typeof(T).Name, _exchangeName, routingKey);
         }
         catch (Exception ex)
