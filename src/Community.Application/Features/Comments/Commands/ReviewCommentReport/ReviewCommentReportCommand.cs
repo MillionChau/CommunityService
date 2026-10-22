@@ -42,6 +42,7 @@ public class ReviewCommentReportCommandHandler : IRequestHandler<ReviewCommentRe
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly INotificationClient _notificationClient;
+    private readonly IReputationService? _reputationService;
 
     public ReviewCommentReportCommandHandler(
         ICommentReportRepository commentReportRepository,
@@ -49,7 +50,8 @@ public class ReviewCommentReportCommandHandler : IRequestHandler<ReviewCommentRe
         IPostRepository postRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
-        INotificationClient notificationClient)
+        INotificationClient notificationClient,
+        IReputationService? reputationService = null)
     {
         _commentReportRepository = commentReportRepository;
         _commentRepository = commentRepository;
@@ -57,6 +59,7 @@ public class ReviewCommentReportCommandHandler : IRequestHandler<ReviewCommentRe
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _notificationClient = notificationClient;
+        _reputationService = reputationService;
     }
 
     public async Task<ResponseModel<bool>> Handle(ReviewCommentReportCommand request, CancellationToken cancellationToken)
@@ -85,6 +88,19 @@ public class ReviewCommentReportCommandHandler : IRequestHandler<ReviewCommentRe
                 comment.Status = (int)ContentStatus.Hidden;
                 postId = comment.PostId;
                 await _commentRepository.UpdateAsync(comment, cancellationToken);
+
+                // SPEC-REP: Phạt trừ điểm khi bình luận bị báo cáo và Admin duyệt (-20 PRP, -10 TSS)
+                if (comment.AuthorId.HasValue && _reputationService != null)
+                {
+                    await _reputationService.DeductPointsAsync(
+                        comment.AuthorId.Value,
+                        "REPORT_APPROVED_COMMENT",
+                        pointsPenalty: 20,
+                        tssPenalty: 10,
+                        sourceId: comment.Id,
+                        reason: $"Admin duyệt báo cáo vi phạm tiêu chuẩn cộng đồng: {report.Reason}",
+                        cancellationToken);
+                }
             }
         }
 
