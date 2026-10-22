@@ -4,7 +4,7 @@ using Community.Application.Features.Comments.Commands.DeleteComment;
 using Community.Application.Features.Comments.Commands.ToggleCommentLike;
 using Community.Application.Features.Comments.Commands.UpdateComment;
 using Community.Application.Features.Comments.Queries.GetCommentsByPost;
-using Community.Application.Features.Posts.Commands.CreateComment;
+using Community.Application.Features.Comments.Commands.CreateComment;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

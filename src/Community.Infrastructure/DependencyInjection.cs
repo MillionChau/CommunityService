@@ -1,6 +1,7 @@
 using Community.Application.Interfaces;
 using Community.Infrastructure.Base;
 using Community.Infrastructure.Interceptors;
+using Community.Infrastructure.Messaging;
 using Community.Infrastructure.Persistence;
 using Community.Infrastructure.Services;
 using Community.Infrastructure.Settings;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
+using StackExchange.Redis;
 using System.Security.Claims;
 using System.Text;
 
@@ -37,6 +39,34 @@ public static class DependencyInjection
         services.AddScoped<Community.Domain.Interfaces.IUnitOfWork>(sp => sp.GetRequiredService<IUnitOfWork>());
         services.AddScoped<ICurrentUserService, CurrentUserService>();
 
+        // Redis Connection & Cache Service
+        services.AddSingleton<IConnectionMultiplexer>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
+            var redisConn = configuration.GetConnectionString("Redis") 
+                            ?? configuration["ConnectionStrings:Redis"] 
+                            ?? "localhost:6379";
+            try
+            {
+                var options = ConfigurationOptions.Parse(redisConn);
+                options.AbortOnConnectFail = false;
+                options.ConnectRetry = 3;
+                return ConnectionMultiplexer.Connect(options);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not connect to Redis at {RedisConn}. In-memory fallback will be active.", redisConn);
+                return null!;
+            }
+        });
+        services.AddSingleton<ICacheService, RedisCacheService>();
+
+        // RabbitMQ Event Publisher
+        services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+
+        // Reputation & Tier System Maintenance Hosted Service (SPEC-REP-01)
+        services.AddHostedService<ReputationMaintenanceHostedService>();
+
         // Kiểm duyệt nội dung AI: gọi sang QualityService thực tế (với Fallback degrade an toàn - Phase 4)
         services.AddHttpClient<IContentModerationService, HttpContentModerationService>();
 
@@ -54,7 +84,8 @@ public static class DependencyInjection
                 type.Name.EndsWith("Repository", StringComparison.Ordinal) ||
                 (type.Name.EndsWith("Service", StringComparison.Ordinal)
                  && type.Name != "StubContentModerationService"
-                 && type.Name != "HttpContentModerationService")))
+                 && type.Name != "HttpContentModerationService"
+                 && type.Name != "RedisCacheService")))
             .AsImplementedInterfaces()
             .WithScopedLifetime());
 
@@ -79,7 +110,6 @@ public static class DependencyInjection
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Secret)),
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromMinutes(1),
-                    // Giữ nguyên claim "sub" (JwtSecurityTokenHandler mặc định map nó sang NameIdentifier)
                     NameClaimType = ClaimTypes.NameIdentifier,
                     RoleClaimType = ClaimTypes.Role
                 };
@@ -97,6 +127,30 @@ public static class DependencyInjection
                             context.Token = accessToken;
                         }
                         return Task.CompletedTask;
+                    },
+                    OnTokenValidated = async context =>
+                    {
+                        var redisMultiplexer = context.HttpContext.RequestServices.GetService<IConnectionMultiplexer>();
+                        if (redisMultiplexer != null && redisMultiplexer.IsConnected)
+                        {
+                            try
+                            {
+                                var authHeader = context.Request.Headers.Authorization.ToString();
+                                var token = authHeader.Replace("Bearer ", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
+                                if (!string.IsNullOrEmpty(token))
+                                {
+                                    var db = redisMultiplexer.GetDatabase();
+                                    if (await db.KeyExistsAsync($"blacklist:{token}"))
+                                    {
+                                        context.Fail("Token đã bị thu hồi.");
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // Fail-open: if Redis error during token check, allow request
+                            }
+                        }
                     }
                 };
             });

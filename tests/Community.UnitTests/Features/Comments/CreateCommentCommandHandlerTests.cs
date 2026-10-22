@@ -1,6 +1,6 @@
 using AutoMapper;
 using Community.Application.Common.Exceptions;
-using Community.Application.Features.Posts.Commands.CreateComment;
+using Community.Application.Features.Comments.Commands.CreateComment;
 using Community.Application.Interfaces;
 using Community.Application.Common.Models;
 using Community.Domain.Contracts;

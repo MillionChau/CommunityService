@@ -58,6 +58,9 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
     private readonly ICurrentUserService _currentUser;
     private readonly IContentModerationService _moderation;
     private readonly IRealTimeNotifier _notifier;
+    private readonly IEventPublisher? _eventPublisher;
+    private readonly ICacheService? _cacheService;
+    private readonly IReputationService? _reputationService;
 
     public CreatePostCommandHandler(
         IPostRepository postRepository,
@@ -65,7 +68,10 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
         ICurrentUserService currentUser,
         IContentModerationService moderation,
         IRealTimeNotifier notifier,
-        ITechZoneRepository? techZoneRepository = null)
+        ITechZoneRepository? techZoneRepository = null,
+        IEventPublisher? eventPublisher = null,
+        ICacheService? cacheService = null,
+        IReputationService? reputationService = null)
     {
         _postRepository = postRepository;
         _techZoneRepository = techZoneRepository;
@@ -73,6 +79,9 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
         _currentUser = currentUser;
         _moderation = moderation;
         _notifier = notifier;
+        _eventPublisher = eventPublisher;
+        _cacheService = cacheService;
+        _reputationService = reputationService;
     }
 
     public async Task<ResponseModel<Guid>> Handle(CreatePostCommand request, CancellationToken cancellationToken)
@@ -81,7 +90,17 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
             throw new UnauthorizedAccessException("Authentication is required.");
 
         // AuthorId luôn lấy từ JWT token (không tin body — tránh đăng bài hộ người khác)
-        var authorId = _currentUser.UserId;
+        var authorId = _currentUser.UserId.Value;
+
+        // SPEC-REP: Kiểm tra quyền hạn đăng bài theo điểm tín nhiệm TSS & Chế tài xử phạt
+        if (_reputationService != null)
+        {
+            var rep = await _reputationService.GetUserReputationAsync(authorId, cancellationToken);
+            if (!rep.CanPost)
+            {
+                throw new InvalidOperationException($"Tài khoản của bạn đang bị giới hạn đăng bài do vi phạm tiêu chuẩn cộng đồng (Chế tài: {rep.SanctionReason ?? "Hạn chế tương tác"}).");
+            }
+        }
 
         var content = request.Content ?? string.Empty;
 
@@ -111,15 +130,9 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
 
         // Kiểm duyệt nội dung tự động (UC-15: Quality Service kiểm duyệt trước khi hiển thị)
         var moderation = await _moderation.CheckAsync(content, cancellationToken);
-
-        if (!moderation.IsValid)
-        {
-            var reason = moderation.Toxicity == "toxic" || moderation.Toxicity == "suspicious"
-                ? $"Nội dung bài viết bị từ chối do vi phạm tiêu chuẩn kiểm duyệt cộng đồng (Toxicity: {moderation.Toxicity}). Vui lòng điều chỉnh lại câu từ."
-                : $"Nội dung bài viết không thuộc lĩnh vực công nghệ thông tin (non-it, Điểm chất lượng: {moderation.QualityScore}/100).";
-
-            return ResponseModel<Guid>.Error(reason);
-        }
+        var isFlagged = !moderation.IsValid;
+        var status = isFlagged ? (int)ContentStatus.Hidden : (int)ContentStatus.Published;
+        var isApproved = isFlagged ? 0 : 1;
 
         var post = new Post
         {
@@ -128,15 +141,15 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
             AuthorId = authorId,
             TechZoneId = request.TechZoneId,
             Tags = request.Tags?.Trim(),
-            Status = (int)ContentStatus.Published,
-            IsApproved = 1,
+            Status = status,
+            IsApproved = isApproved,
             LikesCount = 0,
             CommentsCount = 0,
             SharesCount = 0,
             ViewsCount = 0
         };
 
-        if (request.TechZoneId.HasValue && _techZoneRepository != null)
+        if (!isFlagged && request.TechZoneId.HasValue && _techZoneRepository != null)
         {
             var zone = await _techZoneRepository.GetByIdAsync(request.TechZoneId.Value, cancellationToken);
             if (zone != null)
@@ -148,6 +161,60 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
 
         await _postRepository.AddAsync(post, cancellationToken);
         await _unitOfWork.SaveAsync(cancellationToken);
+
+        // Redis cache invalidation for posts feed
+        if (_cacheService != null)
+        {
+            await _cacheService.RemoveByPrefixAsync("cache:posts:", cancellationToken);
+            await _cacheService.RemoveByPrefixAsync("feed:", cancellationToken);
+        }
+
+        // RabbitMQ: Publish PostCreatedEvent to devradar.events (routing key post.created)
+        if (_eventPublisher != null)
+        {
+            await _eventPublisher.PublishAsync("post.created", new
+            {
+                postId = post.Id,
+                authorId = post.AuthorId,
+                content = post.Content,
+                tags = post.Tags,
+                techZoneId = post.TechZoneId,
+                isFlagged = isFlagged,
+                status = post.Status,
+                createdDate = post.CreatedDate
+            }, cancellationToken);
+        }
+
+        if (isFlagged)
+        {
+            // Trừ điểm do nội dung vi phạm tiêu chuẩn cộng đồng (-30 PRP, -15 TSS)
+            if (_reputationService != null)
+            {
+                await _reputationService.DeductPointsAsync(
+                    authorId,
+                    "POST_FLAGGED_AI",
+                    pointsPenalty: 30,
+                    tssPenalty: 15,
+                    sourceId: post.Id,
+                    reason: "Nội dung bài viết vi phạm tiêu chuẩn cộng đồng (Hệ thống AI kiểm duyệt)",
+                    cancellationToken);
+            }
+
+            return ResponseModel<Guid>.Success(post.Id, "Post created but flagged for review.");
+        }
+
+        // SPEC-REP: Đăng bài viết hợp lệ thành công (+20 PRP, +20 PCS)
+        if (_reputationService != null)
+        {
+            await _reputationService.AddPointsAsync(
+                authorId,
+                "POST_CREATED",
+                pointsDelta: 20,
+                tssDelta: 0,
+                sourceId: post.Id,
+                reason: "Đăng bài viết mới vào cộng đồng",
+                cancellationToken);
+        }
 
         // Realtime: đẩy bài mới lên mọi client đang xem bảng tin
         await _notifier.NotifyFeedAsync("post-created", new
