@@ -287,4 +287,33 @@ public class GetPostsQueryHandlerTests
         Assert.Single(result.Data!.Items);
         Assert.Equal(postA.Id, result.Data.Items.First().Id);
     }
+
+    [Fact]
+    public async Task Handle_WhenAuthenticated_ShouldExcludeOwnPostsByDefault()
+    {
+        // Arrange
+        var myUserId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+
+        var myPost = TestFixture.CreatePost(authorId: myUserId, status: (int)ContentStatus.Published, content: "Bài viết của chính tôi");
+        var otherPost = TestFixture.CreatePost(authorId: otherUserId, status: (int)ContentStatus.Published, content: "Bài viết của người khác");
+
+        var all = _f.ToAsyncQueryable(new List<Post> { myPost, otherPost });
+        _f.PostRepository
+            .Setup(r => r.GetByExpression(It.IsAny<Expression<Func<Post, bool>>>(), It.IsAny<CancellationToken>()))
+            .Returns((Expression<Func<Post, bool>>? expr, CancellationToken _) =>
+                expr == null ? all : all.Where(expr));
+
+        _f.LoginAs(myUserId, "myself", isAdmin: false);
+        var handler = BuildHandler();
+
+        // Act — duyệt Bảng tin Newsfeed (không truyền AuthorId cụ thể)
+        var result = await handler.Handle(new GetPostsQuery { Page = 1, PageSize = 10 }, CancellationToken.None);
+
+        // Assert — Bài viết của chính mình phải bị ẩn, chỉ thấy bài của người khác
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Data!.Items);
+        Assert.Equal(otherPost.Id, result.Data.Items.First().Id);
+        Assert.DoesNotContain(result.Data.Items, p => p.AuthorId == myUserId);
+    }
 }

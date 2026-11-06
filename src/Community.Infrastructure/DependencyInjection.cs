@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddDbContext<CommunityDbContext>((sp, options) =>
         {
             options.UseNpgsql(connectionString);
+            options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
             options.AddInterceptors(sp.GetRequiredService<AuditableEntityInterceptor>());
         });
 
@@ -77,12 +78,16 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(3); // không được phép treo luồng like/comment vì notification
         });
 
+        // Personalized Feed Ranking Service (Dev-Rank algorithm)
+        services.AddScoped<IPersonalizedFeedService, PersonalizedFeedService>();
+
         // Quét tự động bằng Scrutor để đăng ký các class kết thúc bằng Repository hoặc Service
         services.Scan(scan => scan
             .FromAssemblies(typeof(CommunityDbContext).Assembly)
             .AddClasses(classes => classes.Where(type =>
                 type.Name.EndsWith("Repository", StringComparison.Ordinal) ||
                 (type.Name.EndsWith("Service", StringComparison.Ordinal)
+                 && !type.Name.EndsWith("HostedService", StringComparison.Ordinal)
                  && type.Name != "StubContentModerationService"
                  && type.Name != "HttpContentModerationService"
                  && type.Name != "RedisCacheService")))

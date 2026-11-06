@@ -15,7 +15,7 @@ namespace Community.Domain.Entities
             Id = Guid.NewGuid();
             TrustSafetyScore = 80;
             CurrentTierLevel = 1;
-            TierTitle = "Code Initiate";
+            TierTitle = "Newbie";
             LastActivityAt = DateTime.UtcNow;
             UpdatedAt = DateTime.UtcNow;
         }
@@ -37,10 +37,10 @@ namespace Community.Domain.Entities
         public int TrustSafetyScore { get; set; } = 80;
 
         /// <summary>
-        /// Cấp bậc hiện tại (1: Code Initiate -> 6: DevRadar Fellow).
+        /// Cấp bậc hiện tại (1: Newbie -> 5: Legend).
         /// </summary>
         public int CurrentTierLevel { get; set; } = 1;
-        public string TierTitle { get; set; } = "Code Initiate";
+        public string TierTitle { get; set; } = "Newbie";
 
         /// <summary>
         /// Điểm Đóng góp Tuần (Weekly Contribution Score - PCS_W).

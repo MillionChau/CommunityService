@@ -38,6 +38,7 @@ public class ReputationController : ApiControllerBase
     /// Lấy thông tin điểm uy tín và cấp bậc công khai của một người dùng bất kỳ.
     /// </summary>
     [HttpGet("user/{userId:guid}")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(ResponseModel<UserReputationDto>), 200)]
     public async Task<IActionResult> GetUserReputation(Guid userId, CancellationToken cancellationToken)
     {

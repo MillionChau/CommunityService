@@ -44,7 +44,8 @@ public class HttpContentModerationService : IContentModerationService
             {
                 IsValid = false,
                 Toxicity = "toxic",
-                QualityScore = 0
+                QualityScore = 0,
+                Reason = "Nội dung không được để trống."
             };
         }
 
@@ -74,14 +75,32 @@ public class HttpContentModerationService : IContentModerationService
                     qualityScore = scoreProp.GetInt32();
                 }
 
-                _logger.LogInformation("QualityService moderation completed. ContentType: {ContentType}, IsValid: {IsValid}, Toxicity: {Toxicity}, QualityScore: {QualityScore}",
-                    contentType, isValid, toxicity, qualityScore);
+                string? reason = null;
+                if (!isValid)
+                {
+                    if (toxicity == "toxic" || toxicity == "suspicious")
+                    {
+                        reason = "Nội dung chứa từ ngữ độc hại hoặc không phù hợp";
+                    }
+                    else if (root.TryGetProperty("is_it", out var isItProp) && !isItProp.GetBoolean())
+                    {
+                        reason = "Nội dung không thuộc lĩnh vực công nghệ thông tin (IT)";
+                    }
+                    else
+                    {
+                        reason = "Nội dung vi phạm tiêu chuẩn cộng đồng";
+                    }
+                }
+
+                _logger.LogInformation("QualityService moderation completed. ContentType: {ContentType}, IsValid: {IsValid}, Toxicity: {Toxicity}, QualityScore: {QualityScore}, Reason: {Reason}",
+                    contentType, isValid, toxicity, qualityScore, reason);
 
                 return new ModerationResult
                 {
                     IsValid = isValid,
                     Toxicity = toxicity,
                     QualityScore = qualityScore,
+                    Reason = reason,
                     RawResponse = responseBody
                 };
             }

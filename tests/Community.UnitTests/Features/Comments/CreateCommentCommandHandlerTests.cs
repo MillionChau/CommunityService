@@ -183,5 +183,8 @@ public class CreateCommentCommandHandlerTests
             c.Status == (int)ContentStatus.Hidden && c.IsApproved == 0),
             It.IsAny<CancellationToken>()), Times.Once);
         _f.Notifier.Verify(n => n.NotifyPostAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Never);
+        _f.NotificationClient.Verify(c => c.SendAsync(
+            It.Is<NotificationOutbound>(n => n.RecipientId == authorId && n.Type == NotificationTypes.System),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }

@@ -17,10 +17,10 @@ public class UserReputationDto
     public int TrustSafetyScore { get; set; }
 
     /// <summary>
-    /// Cấp bậc hiện tại (1 - 6)
+    /// Cấp bậc hiện tại (1 - 5: Newbie, Junior, Senior, Master, Legend)
     /// </summary>
     public int CurrentTierLevel { get; set; }
-    public string TierTitle { get; set; } = "Code Initiate";
+    public string TierTitle { get; set; } = "Newbie";
     public string TierBadge { get; set; } = "🌱 Tân thủ";
 
     public string? NextTierTitle { get; set; }

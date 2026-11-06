@@ -169,9 +169,9 @@ public class DeleteAndGetCommentsHandlerTests
     }
 
     [Fact]
-    public async Task GetComments_AsAdmin_ShouldSeeHiddenButNotDeleted()
+    public async Task GetComments_AsAdmin_ShouldAlsoOnlySeePublishedCommentsInCommunityFeed()
     {
-        // Arrange — Admin thấy được Hidden (kiểm duyệt) nhưng vẫn không thấy Deleted
+        // Arrange — Phía Community Feed chỉ hiển thị Published cho mọi người (Admin kiểm duyệt ở Admin portal)
         var post = TestFixture.CreatePost();
         var comments = new List<Comment>
         {
@@ -187,8 +187,8 @@ public class DeleteAndGetCommentsHandlerTests
         // Act
         var result = await handler.Handle(new GetCommentsByPostQuery(post.Id), CancellationToken.None);
 
-        // Assert
-        Assert.Equal(2, result.Data!.Count());
+        // Assert - Chỉ 1 comment Published được trả về ở Community
+        Assert.Single(result.Data!);
     }
 
     [Fact]

@@ -15,6 +15,9 @@ public class ModerationResult
     /// <summary>Điểm chất lượng 0-100 do AI chấm.</summary>
     public int QualityScore { get; set; }
 
+    /// <summary>Lý do vi phạm nếu nội dung không hợp lệ.</summary>
+    public string? Reason { get; set; }
+
     /// <summary>Chi tiết bổ sung (issues, cleaned_text...) — dạng raw JSON để linh hoạt.</summary>
     public string? RawResponse { get; set; }
 }

@@ -26,18 +26,16 @@ public class ReputationService : IReputationService
 
     private static (int level, string title, string badge, string? nextTitle, int? nextReq) CalculateTier(int prp)
     {
-        if (prp >= 5000)
-            return (6, "DevRadar Fellow", "🏆 Huyền thoại công nghệ", null, null);
         if (prp >= 2500)
-            return (5, "Principal Architect", "👑 Kiến trúc sư trưởng", "DevRadar Fellow", 5000);
+            return (5, "Legend", "🏆 Huyền thoại", null, null);
         if (prp >= 1000)
-            return (4, "Tech Lead", "⭐ Trưởng nhóm kỹ thuật", "Principal Architect", 2500);
+            return (4, "Master", "⭐ Chuyên gia", "Legend", 2500);
         if (prp >= 400)
-            return (3, "Senior Contributor", "🚀 Đóng góp tích cực", "Tech Lead", 1000);
+            return (3, "Senior", "🚀 Senior", "Master", 1000);
         if (prp >= 100)
-            return (2, "Developer", "💻 Lập trình viên", "Senior Contributor", 400);
+            return (2, "Junior", "💻 Lập trình viên", "Senior", 400);
 
-        return (1, "Code Initiate", "🌱 Tân thủ", "Developer", 100);
+        return (1, "Newbie", "🌱 Tân thủ", "Junior", 100);
     }
 
     private async Task<UserReputation> GetOrCreateReputationAsync(Guid userId, CancellationToken ct)
@@ -52,7 +50,7 @@ public class ReputationService : IReputationService
                 PermanentReputationPoints = 0,
                 TrustSafetyScore = 80,
                 CurrentTierLevel = 1,
-                TierTitle = "Code Initiate",
+                TierTitle = "Newbie",
                 LastActivityAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -94,7 +92,6 @@ public class ReputationService : IReputationService
                 2 => 100,
                 3 => 400,
                 4 => 1000,
-                5 => 2500,
                 _ => 0
             };
             var span = nextReq.Value - basePoints;
@@ -107,8 +104,7 @@ public class ReputationService : IReputationService
         if (level >= 2) privileges.Add("Tạo TechZone tags mới, bình luận tức thì");
         if (level >= 3) privileges.Add("Huy hiệu Bạc, không giới hạn bài viết/ngày, gắn cờ ưu tiên");
         if (level >= 4) privileges.Add("Huy hiệu Vàng, bài viết được gợi ý Trending, miễn kiểm duyệt trước");
-        if (level >= 5) privileges.Add("Huy hiệu Kim cương, quyền đề xuất Ghim bài viết TechZone");
-        if (level >= 6) privileges.Add("Khung Avatar phát sáng, tham gia Ban Cố vấn Kỹ thuật");
+        if (level >= 5) privileges.Add("Khung Avatar phát sáng, tham gia Ban Cố vấn Kỹ thuật");
 
         // Calculate permissions based on TSS & Sanctions
         var canPost = rep.SanctionLevel < 3 && rep.TrustSafetyScore >= 20;
@@ -461,6 +457,36 @@ public class ReputationService : IReputationService
                 .ToListAsync(ct);
         }
 
+        if (sortedUsers.Count == 0)
+        {
+            return new List<LeaderboardUserDto>();
+        }
+
+        var userIds = sortedUsers.Select(u => u.UserId).ToList();
+
+        var postStats = await _db.Posts
+            .AsNoTracking()
+            .Where(p => p.AuthorId.HasValue && userIds.Contains(p.AuthorId.Value) && (p.Status == 1 || p.Status == null) && (p.IsDeleted == null || p.IsDeleted == 0))
+            .GroupBy(p => p.AuthorId!.Value)
+            .Select(g => new
+            {
+                UserId = g.Key,
+                PostCount = g.Count(),
+                LikeCount = g.Sum(p => p.LikesCount ?? 0)
+            })
+            .ToDictionaryAsync(x => x.UserId, ct);
+
+        var commentStats = await _db.Comments
+            .AsNoTracking()
+            .Where(c => c.AuthorId.HasValue && userIds.Contains(c.AuthorId.Value) && (c.Status == 1 || c.Status == null) && (c.IsDeleted == null || c.IsDeleted == 0))
+            .GroupBy(c => c.AuthorId!.Value)
+            .Select(g => new
+            {
+                UserId = g.Key,
+                CommentCount = g.Count()
+            })
+            .ToDictionaryAsync(x => x.UserId, ct);
+
         var result = new List<LeaderboardUserDto>();
         for (int i = 0; i < sortedUsers.Count; i++)
         {
@@ -478,6 +504,9 @@ public class ReputationService : IReputationService
                 _ => u.PermanentReputationPoints
             };
 
+            postStats.TryGetValue(u.UserId, out var pStat);
+            commentStats.TryGetValue(u.UserId, out var cStat);
+
             result.Add(new LeaderboardUserDto
             {
                 UserId = u.UserId,
@@ -485,6 +514,9 @@ public class ReputationService : IReputationService
                 AvatarUrl = u.AvatarUrl,
                 Rank = i + 1,
                 Score = score,
+                PostCount = pStat?.PostCount ?? 0,
+                LikeCount = pStat?.LikeCount ?? 0,
+                CommentCount = cStat?.CommentCount ?? 0,
                 TierLevel = tierLevel,
                 TierTitle = tierTitle,
                 TierBadge = tierBadge,

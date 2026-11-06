@@ -16,12 +16,20 @@ namespace Community.API.Controllers;
 public class CommentController : ApiControllerBase
 {
     /// <summary>Xem bình luận của một bài viết (FR-24 ngữ cảnh đọc) — công khai.</summary>
+    [HttpGet]
     [HttpGet("post/{postId:guid}")]
     [AllowAnonymous]
-    public async Task<ActionResult<ResponseModel<IEnumerable<CommentDto>>>> GetByPost(Guid postId,
+    public async Task<ActionResult<ResponseModel<IEnumerable<CommentDto>>>> GetByPost(
+        [FromRoute] Guid? postId,
+        [FromQuery(Name = "postId")] Guid? queryPostId,
         CancellationToken cancellationToken)
     {
-        var result = await Mediator.Send(new GetCommentsByPostQuery(postId), cancellationToken);
+        var targetId = (postId.HasValue && postId.Value != Guid.Empty) ? postId.Value : queryPostId;
+        if (!targetId.HasValue || targetId.Value == Guid.Empty)
+        {
+            return BadRequest(ResponseModel<IEnumerable<CommentDto>>.Error("postId is required"));
+        }
+        var result = await Mediator.Send(new GetCommentsByPostQuery(targetId.Value), cancellationToken);
         return Ok(result);
     }
 

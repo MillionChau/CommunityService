@@ -1,3 +1,4 @@
+using Community.Application.Common.Helpers;
 using Community.Application.Common.Models;
 using Community.Application.Interfaces;
 using Community.Domain.Contracts;
@@ -6,6 +7,7 @@ using Community.Domain.Enums;
 using Community.Domain.Interfaces;
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace Community.Application.Features.Posts.Commands.CreatePost;
 
@@ -61,6 +63,8 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
     private readonly IEventPublisher? _eventPublisher;
     private readonly ICacheService? _cacheService;
     private readonly IReputationService? _reputationService;
+    private readonly INotificationClient? _notificationClient;
+    private readonly IUserReputationRepository? _userReputationRepository;
 
     public CreatePostCommandHandler(
         IPostRepository postRepository,
@@ -71,7 +75,9 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
         ITechZoneRepository? techZoneRepository = null,
         IEventPublisher? eventPublisher = null,
         ICacheService? cacheService = null,
-        IReputationService? reputationService = null)
+        IReputationService? reputationService = null,
+        INotificationClient? notificationClient = null,
+        IUserReputationRepository? userReputationRepository = null)
     {
         _postRepository = postRepository;
         _techZoneRepository = techZoneRepository;
@@ -82,6 +88,8 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
         _eventPublisher = eventPublisher;
         _cacheService = cacheService;
         _reputationService = reputationService;
+        _notificationClient = notificationClient;
+        _userReputationRepository = userReputationRepository;
     }
 
     public async Task<ResponseModel<Guid>> Handle(CreatePostCommand request, CancellationToken cancellationToken)
@@ -200,6 +208,23 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
                     cancellationToken);
             }
 
+            // Thông báo tới người dùng bài viết đã bị ẩn do vi phạm tiêu chuẩn cộng đồng
+            if (_notificationClient != null)
+            {
+                var reasonDetail = !string.IsNullOrWhiteSpace(moderation.Reason)
+                    ? $": {moderation.Reason}"
+                    : " (nội dung vi phạm tiêu chuẩn cộng đồng).";
+                await _notificationClient.SendAsync(new NotificationOutbound
+                {
+                    RecipientId = authorId,
+                    Type = NotificationTypes.PostHidden,
+                    Content = $"Bài viết của bạn đã bị ẩn do vi phạm tiêu chuẩn cộng đồng{reasonDetail}",
+                    LinkUrl = $"/posts/{post.Id}",
+                    RelatedEntityId = post.Id,
+                    RelatedPostId = post.Id
+                }, cancellationToken);
+            }
+
             return ResponseModel<Guid>.Success(post.Id, "Post created but flagged for review.");
         }
 
@@ -216,17 +241,64 @@ public class CreatePostCommandHandler : IRequestHandler<CreatePostCommand, Respo
                 cancellationToken);
         }
 
-        // Realtime: đẩy bài mới lên mọi client đang xem bảng tin
+        // Lấy thông tin tác giả và cấp bậc uy tín để đính kèm payload Realtime
+        string? authorUsername = null;
+        string? authorAvatarUrl = null;
+        int authorReputationPoints = 0;
+        string authorTierTitle = "Code Initiate";
+        string authorTierBadge = "🌱 Tân thủ";
+
+        if (_userReputationRepository != null)
+        {
+            var rep = await _userReputationRepository
+                .GetByExpression(r => r.UserId == authorId, cancellationToken)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (rep != null)
+            {
+                authorUsername = rep.Username;
+                authorAvatarUrl = rep.AvatarUrl;
+                authorReputationPoints = rep.PermanentReputationPoints;
+                authorTierTitle = rep.TierTitle ?? "Code Initiate";
+                authorTierBadge = ReputationTierHelper.GetTierBadge(rep.PermanentReputationPoints);
+            }
+        }
+
+        string? techZoneName = null;
+        string? techZoneSlug = null;
+        if (post.TechZoneId.HasValue && _techZoneRepository != null)
+        {
+            var zone = await _techZoneRepository.GetByIdAsync(post.TechZoneId.Value, cancellationToken);
+            if (zone != null)
+            {
+                techZoneName = zone.Name;
+                techZoneSlug = zone.Slug;
+            }
+        }
+
+        // Realtime: đẩy bài mới lên mọi client đang xem bảng tin (Feed Group)
         await _notifier.NotifyFeedAsync("post-created", new
         {
+            id = post.Id,
             postId = post.Id,
             authorId = post.AuthorId,
+            authorUsername = authorUsername,
+            authorName = authorUsername,
+            authorAvatarUrl = authorAvatarUrl,
+            authorReputationPoints = authorReputationPoints,
+            authorTierTitle = authorTierTitle,
+            authorTierBadge = authorTierBadge,
+            techZoneId = post.TechZoneId,
+            techZoneName = techZoneName,
+            techZoneSlug = techZoneSlug,
+            tags = post.Tags,
             content = post.Content,
             status = post.Status,
+            isApproved = post.IsApproved,
             likesCount = post.LikesCount,
             commentsCount = post.CommentsCount,
             sharesCount = post.SharesCount,
             bookmarksCount = post.BookmarksCount,
+            viewsCount = post.ViewsCount,
             createdDate = post.CreatedDate
         }, cancellationToken);
 
