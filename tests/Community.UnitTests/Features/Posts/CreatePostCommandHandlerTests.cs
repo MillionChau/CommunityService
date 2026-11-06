@@ -67,6 +67,33 @@ public class CreatePostCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenContentViolatesModeration_ShouldSendNotificationToAuthor()
+    {
+        // Arrange
+        var authorId = Guid.NewGuid();
+        _f.LoginAs(authorId, "alice");
+        _f.Moderation.Setup(m => m.CheckAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ModerationResult { IsValid = false, Toxicity = "toxic", QualityScore = 10, Reason = "Nội dung độc hại" });
+
+        var handler = new CreatePostCommandHandler(
+            _f.PostRepository.Object, _f.UnitOfWork.Object, _f.CurrentUser.Object,
+            _f.Moderation.Object, _f.Notifier.Object,
+            notificationClient: _f.NotificationClient.Object);
+
+        // Act
+        var result = await handler.Handle(new CreatePostCommand { Content = "nội dung xấu" }, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        _f.NotificationClient.Verify(c => c.SendAsync(
+            It.Is<NotificationOutbound>(n =>
+                n.RecipientId == authorId &&
+                n.Type == NotificationTypes.PostHidden &&
+                n.Content.Contains("Nội dung độc hại")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task Handle_WhenNotAuthenticated_ShouldThrowUnauthorized()
     {
         // Arrange — Guest không được đăng bài

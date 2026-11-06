@@ -225,6 +225,70 @@ namespace Community.Infrastructure.Migrations
                     b.ToTable("CommentReports", (string)null);
                 });
 
+            modelBuilder.Entity("Community.Domain.Entities.LeaderboardEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AvatarUrl")
+                        .HasColumnType("text");
+
+                    b.Property<int>("LikesCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PostsCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TierTitle")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SnapshotId");
+
+                    b.ToTable("LeaderboardEntries");
+                });
+
+            modelBuilder.Entity("Community.Domain.Entities.LeaderboardSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PeriodCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PeriodType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LeaderboardSnapshots");
+                });
+
             modelBuilder.Entity("Community.Domain.Entities.Post", b =>
                 {
                     b.Property<Guid>("Id")
@@ -433,6 +497,44 @@ namespace Community.Infrastructure.Migrations
                     b.ToTable("PostReports", (string)null);
                 });
 
+            modelBuilder.Entity("Community.Domain.Entities.ReputationTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PointsChanged")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("SourceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("TssChanged")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("UserReputationId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserReputationId");
+
+                    b.ToTable("ReputationTransactions");
+                });
+
             modelBuilder.Entity("Community.Domain.Entities.TechZone", b =>
                 {
                     b.Property<Guid>("Id")
@@ -537,6 +639,105 @@ namespace Community.Infrastructure.Migrations
                     b.ToTable("UserFollows", (string)null);
                 });
 
+            modelBuilder.Entity("Community.Domain.Entities.UserReputation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AvatarUrl")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ConsecutiveCleanWeeks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ConsecutiveInactiveWeeks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CurrentTierLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsSanctioned")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastActivityAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastTssPassiveRecoveryAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("MonthlyContributionScore")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PermanentReputationPoints")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SanctionExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SanctionLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SanctionReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TierTitle")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("TrustSafetyScore")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Username")
+                        .HasColumnType("text");
+
+                    b.Property<int>("WeeklyContributionScore")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("UserReputations");
+                });
+
+            modelBuilder.Entity("Community.Domain.Entities.UserSanction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("IssuedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("SanctionLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("UserSanctions");
+                });
+
             modelBuilder.Entity("Community.Domain.Entities.Comment", b =>
                 {
                     b.HasOne("Community.Domain.Entities.Post", null)
@@ -561,6 +762,17 @@ namespace Community.Infrastructure.Migrations
                         .HasForeignKey("CommentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Community.Domain.Entities.LeaderboardEntry", b =>
+                {
+                    b.HasOne("Community.Domain.Entities.LeaderboardSnapshot", "Snapshot")
+                        .WithMany("Entries")
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Snapshot");
                 });
 
             modelBuilder.Entity("Community.Domain.Entities.Post", b =>
@@ -607,9 +819,23 @@ namespace Community.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Community.Domain.Entities.ReputationTransaction", b =>
+                {
+                    b.HasOne("Community.Domain.Entities.UserReputation", "UserReputation")
+                        .WithMany("Transactions")
+                        .HasForeignKey("UserReputationId");
+
+                    b.Navigation("UserReputation");
+                });
+
             modelBuilder.Entity("Community.Domain.Entities.BookmarkFolder", b =>
                 {
                     b.Navigation("Bookmarks");
+                });
+
+            modelBuilder.Entity("Community.Domain.Entities.LeaderboardSnapshot", b =>
+                {
+                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("Community.Domain.Entities.Post", b =>
@@ -622,6 +848,11 @@ namespace Community.Infrastructure.Migrations
             modelBuilder.Entity("Community.Domain.Entities.TechZone", b =>
                 {
                     b.Navigation("Posts");
+                });
+
+            modelBuilder.Entity("Community.Domain.Entities.UserReputation", b =>
+                {
+                    b.Navigation("Transactions");
                 });
 #pragma warning restore 612, 618
         }

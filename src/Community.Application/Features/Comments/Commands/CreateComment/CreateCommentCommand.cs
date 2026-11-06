@@ -92,12 +92,14 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
 
         // Kiểm duyệt bình luận bằng AI (QualityService)
         var isFlagged = false;
+        string? moderationReason = null;
         if (_moderation != null)
         {
             var moderation = await _moderation.CheckAsync(request.Content, "comment", cancellationToken);
             if (!moderation.IsValid)
             {
                 isFlagged = true;
+                moderationReason = moderation.Reason;
             }
         }
 
@@ -129,6 +131,20 @@ public class CreateCommentCommandHandler : IRequestHandler<CreateCommentCommand,
                     reason: "Nội dung bình luận vi phạm tiêu chuẩn cộng đồng (Hệ thống AI kiểm duyệt)",
                     cancellationToken);
             }
+
+            // Gửi thông báo đến người dùng về việc bình luận bị ẩn do vi phạm tiêu chuẩn
+            var reasonDetail = !string.IsNullOrWhiteSpace(moderationReason)
+                ? $": {moderationReason}"
+                : " (nội dung vi phạm quy định cộng đồng).";
+            await _notificationClient.SendAsync(new NotificationOutbound
+            {
+                RecipientId = authorId,
+                Type = NotificationTypes.System,
+                Content = $"Bình luận của bạn đã bị ẩn do vi phạm tiêu chuẩn cộng đồng{reasonDetail}",
+                LinkUrl = $"/posts/{request.PostId}",
+                RelatedEntityId = comment.Id,
+                RelatedPostId = request.PostId
+            }, cancellationToken);
 
             var flaggedDto = _mapper.Map<CommentDto>(comment);
             return ResponseModel<CommentDto>.Success(flaggedDto, "Comment created but flagged for review.");

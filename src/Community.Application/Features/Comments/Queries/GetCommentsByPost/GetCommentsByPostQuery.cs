@@ -51,14 +51,8 @@ public class GetCommentsByPostQueryHandler
 
         var comments = await _commentRepository.GetCommentsByPostIdAsync(request.PostId, cancellationToken);
 
-        if (!_currentUser.IsAdmin)
-        {
-            comments = comments.Where(c => c.Status == null || c.Status == (int)ContentStatus.Published);
-        }
-        else
-        {
-            comments = comments.Where(c => c.Status != (int)ContentStatus.Deleted);
-        }
+        // Phía Community: Tuyệt đối không hiển thị bất kỳ bình luận vi phạm hoặc bị ẩn nào (Status != Published hoặc IsApproved == 0) cho bất kỳ ai
+        comments = comments.Where(c => (c.Status == null || c.Status == (int)ContentStatus.Published) && (c.IsApproved == null || c.IsApproved == 1));
 
         var dtos = _mapper.Map<IEnumerable<CommentDto>>(comments).ToList();
 

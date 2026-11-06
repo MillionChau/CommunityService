@@ -18,6 +18,14 @@ public class PostDto
     public string? Tags { get; set; }
     public Guid? BookmarkFolderId { get; set; }
 
+    // Thông tin tác giả và cấp bậc uy tín (SPEC-REP-01)
+    public string? AuthorUsername { get; set; }
+    public string? AuthorName { get; set; }
+    public string? AuthorAvatarUrl { get; set; }
+    public int? AuthorReputationPoints { get; set; }
+    public string? AuthorTierTitle { get; set; }
+    public string? AuthorTierBadge { get; set; }
+
     // Trạng thái tương tác của NGƯỜI XEM HIỆN TẠI (điền trong handler theo JWT, không map từ entity)
     public bool IsLikedByViewer { get; set; }
     public bool IsBookmarkedByViewer { get; set; }

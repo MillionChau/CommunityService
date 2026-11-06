@@ -76,24 +76,26 @@ public class ReviewPostReportCommandHandler : IRequestHandler<ReviewPostReportCo
         report.ReviewNote = request.ReviewNote;
         await _postReportRepository.UpdateAsync(report, cancellationToken);
 
+        Post? violatingPost = null;
+
         // Duyệt báo cáo → ẩn bài viết vi phạm (SRS: "ẩn nội dung vi phạm")
         if (request.Approve)
         {
-            var post = await _postRepository.GetByIdAsync(report.PostId, cancellationToken);
-            if (post != null)
+            violatingPost = await _postRepository.GetByIdAsync(report.PostId, cancellationToken);
+            if (violatingPost != null)
             {
-                post.Status = (int)ContentStatus.Hidden;
-                await _postRepository.UpdateAsync(post, cancellationToken);
+                violatingPost.Status = (int)ContentStatus.Hidden;
+                await _postRepository.UpdateAsync(violatingPost, cancellationToken);
 
                 // SPEC-REP: Phạt trừ điểm khi bài viết bị báo cáo và Admin xác nhận vi phạm (-30 PRP, -15 TSS)
-                if (post.AuthorId.HasValue && _reputationService != null)
+                if (violatingPost.AuthorId.HasValue && _reputationService != null)
                 {
                     await _reputationService.DeductPointsAsync(
-                        post.AuthorId.Value,
+                        violatingPost.AuthorId.Value,
                         "REPORT_APPROVED_POST",
                         pointsPenalty: 30,
                         tssPenalty: 15,
-                        sourceId: post.Id,
+                        sourceId: violatingPost.Id,
                         reason: $"Admin duyệt báo cáo vi phạm tiêu chuẩn cộng đồng: {report.Reason}",
                         cancellationToken);
                 }
@@ -116,6 +118,25 @@ public class ReviewPostReportCommandHandler : IRequestHandler<ReviewPostReportCo
             ActorId = _currentUser.UserId,
             ActorName = _currentUser.UserName
         }, cancellationToken);
+
+        // ===== Thông báo cho tác giả bài viết vi phạm khi bài bị ẩn =====
+        if (request.Approve && violatingPost?.AuthorId.HasValue == true)
+        {
+            var note = !string.IsNullOrWhiteSpace(request.ReviewNote)
+                ? $": {request.ReviewNote}"
+                : (!string.IsNullOrWhiteSpace(report.Reason) ? $": {report.Reason}" : ".");
+            await _notificationClient.SendAsync(new NotificationOutbound
+            {
+                RecipientId = violatingPost.AuthorId.Value,
+                Type = NotificationTypes.PostHidden,
+                Content = $"Bài viết của bạn đã bị Quản trị viên ẩn do vi phạm tiêu chuẩn cộng đồng{note}",
+                LinkUrl = $"/posts/{violatingPost.Id}",
+                RelatedEntityId = violatingPost.Id,
+                RelatedPostId = violatingPost.Id,
+                ActorId = _currentUser.UserId,
+                ActorName = _currentUser.UserName
+            }, cancellationToken);
+        }
 
         // Gỡ báo cáo khỏi hàng chờ PendingReport của NotificationService
         await _notificationClient.ResolvePendingReportAsync(report.Id, cancellationToken);

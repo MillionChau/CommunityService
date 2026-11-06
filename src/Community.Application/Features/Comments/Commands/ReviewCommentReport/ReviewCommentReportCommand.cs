@@ -80,24 +80,26 @@ public class ReviewCommentReportCommandHandler : IRequestHandler<ReviewCommentRe
 
         // Nếu duyệt báo cáo -> ẩn bình luận vi phạm
         Guid? postId = null;
+        Comment? violatingComment = null;
+
         if (request.Approve)
         {
-            var comment = await _commentRepository.GetByIdAsync(report.CommentId, cancellationToken);
-            if (comment != null)
+            violatingComment = await _commentRepository.GetByIdAsync(report.CommentId, cancellationToken);
+            if (violatingComment != null)
             {
-                comment.Status = (int)ContentStatus.Hidden;
-                postId = comment.PostId;
-                await _commentRepository.UpdateAsync(comment, cancellationToken);
+                violatingComment.Status = (int)ContentStatus.Hidden;
+                postId = violatingComment.PostId;
+                await _commentRepository.UpdateAsync(violatingComment, cancellationToken);
 
                 // SPEC-REP: Phạt trừ điểm khi bình luận bị báo cáo và Admin duyệt (-20 PRP, -10 TSS)
-                if (comment.AuthorId.HasValue && _reputationService != null)
+                if (violatingComment.AuthorId.HasValue && _reputationService != null)
                 {
                     await _reputationService.DeductPointsAsync(
-                        comment.AuthorId.Value,
+                        violatingComment.AuthorId.Value,
                         "REPORT_APPROVED_COMMENT",
                         pointsPenalty: 20,
                         tssPenalty: 10,
-                        sourceId: comment.Id,
+                        sourceId: violatingComment.Id,
                         reason: $"Admin duyệt báo cáo vi phạm tiêu chuẩn cộng đồng: {report.Reason}",
                         cancellationToken);
                 }
@@ -120,6 +122,25 @@ public class ReviewCommentReportCommandHandler : IRequestHandler<ReviewCommentRe
             ActorId = _currentUser.UserId,
             ActorName = _currentUser.UserName
         }, cancellationToken);
+
+        // ===== Thông báo cho tác giả bình luận vi phạm khi bình luận bị ẩn =====
+        if (request.Approve && violatingComment?.AuthorId.HasValue == true)
+        {
+            var note = !string.IsNullOrWhiteSpace(request.ReviewNote)
+                ? $": {request.ReviewNote}"
+                : (!string.IsNullOrWhiteSpace(report.Reason) ? $": {report.Reason}" : ".");
+            await _notificationClient.SendAsync(new NotificationOutbound
+            {
+                RecipientId = violatingComment.AuthorId.Value,
+                Type = NotificationTypes.System,
+                Content = $"Bình luận của bạn đã bị Quản trị viên ẩn do vi phạm tiêu chuẩn cộng đồng{note}",
+                LinkUrl = postId.HasValue ? $"/posts/{postId.Value}" : "/community",
+                RelatedEntityId = violatingComment.Id,
+                RelatedPostId = postId,
+                ActorId = _currentUser.UserId,
+                ActorName = _currentUser.UserName
+            }, cancellationToken);
+        }
 
         await _notificationClient.ResolvePendingReportAsync(report.Id, cancellationToken);
 
